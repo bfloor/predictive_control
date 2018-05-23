@@ -68,11 +68,8 @@ bool pd_frame_tracker::initialize()
   use_mayer_term_ = predictive_configuration::use_mayer_term_;
 
   // initialize state and control weight factors
-  if (use_LSQ_term_)
-  {
-    lsq_state_weight_factors_ = transformStdVectorToEigenVector(predictive_configuration::lsq_state_weight_factors_);
-    lsq_control_weight_factors_ = transformStdVectorToEigenVector(predictive_configuration::lsq_control_weight_factors_);
-  }
+  lsq_state_weight_factors_ = transformStdVectorToEigenVector(predictive_configuration::lsq_state_weight_factors_);
+  lsq_control_weight_factors_ = transformStdVectorToEigenVector(predictive_configuration::lsq_control_weight_factors_);
 
   //state_vector_size_ = predictive_configuration::lsq_state_weight_factors_.size();
   //control_vector_size_ = predictive_configuration::lsq_control_weight_factors_.size();
@@ -199,10 +196,10 @@ void pd_frame_tracker::generateCostFunction(OCP &OCP_problem,
     {
       ROS_INFO("pd_frame_tracker::generateCostFunction: use_mayer_term_");
     }
-    OCP_problem.minimizeMayerTerm( 10.0 * ( (x(0) - goal_pose(0)) * (x(0) - goal_pose(0))
-                                             +(x(1) - goal_pose(1)) * (x(1) - goal_pose(1))
-                                             +(x(2) - goal_pose(2)) * (x(2) - goal_pose(2)) )
-                                     + 10.0 * (v.transpose() * v)
+    OCP_problem.minimizeMayerTerm( lsq_state_weight_factors_(0) * ((x(0) - goal_pose(0)) * (x(0) - goal_pose(0)))
+                                             + lsq_state_weight_factors_(1) * ((x(1) - goal_pose(1)) * (x(1) - goal_pose(1)))
+                                             + lsq_state_weight_factors_(2) * ((x(2) - goal_pose(2)) * (x(2) - goal_pose(2)))
+                                     + lsq_control_weight_factors_(0) * (v.transpose() * v)
                                   );
 
     //OCP_problem.minimizeMayerTerm( 10.0* ( (x-goal_pose) * (x-goal_pose) ) + 1.00* (v.transpose() * v) );
