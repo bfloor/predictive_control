@@ -123,7 +123,10 @@ bool MPCC::initialize()
         robot_state_sub_ = nh.subscribe(controller_config_->robot_state_topic_, 1, &MPCC::StateCallBack, this);
 
         //To be implemented
+        // traj_pub_ = nh.advertise<visualization_msgs::MarkerArray>("pd_trajectory",2);
         traj_pub_ = nh.advertise<visualization_msgs::MarkerArray>("pd_trajectory",1);
+        clothoid_pub_ = nh.advertise<nav_msgs::Path>("clothoid_path",1);
+        tr_pub_ = nh.advertise<nav_msgs::Path>("planner_path",1);
         controlled_velocity_pub_ = nh.advertise<geometry_msgs::Twist>(controller_config_->output_cmd,1);
 
         ros::Duration(1).sleep();
@@ -166,9 +169,9 @@ void MPCC::runNode(const ros::TimerEvent &event)
 	if(i< ((int)traj.multi_dof_joint_trajectory.points.size())){
 
 		//assigning next point as goal pose since initial point of trajectory is actual pose
-		goal_pose_(0) = traj.multi_dof_joint_trajectory.points[(((int)traj.multi_dof_joint_trajectory.points.size()-1))].transforms[0].translation.x;
-		goal_pose_(1) = traj.multi_dof_joint_trajectory.points[(((int)traj.multi_dof_joint_trajectory.points.size()-1))].transforms[0].translation.y;
-		goal_pose_(2) = traj.multi_dof_joint_trajectory.points[(((int)traj.multi_dof_joint_trajectory.points.size()-1))].transforms[0].rotation.z;
+		goal_pose_(0) = traj.multi_dof_joint_trajectory.points[(((int)traj.multi_dof_joint_trajectory.points.size() - 1))].transforms[0].translation.x;
+		goal_pose_(1) = traj.multi_dof_joint_trajectory.points[(((int)traj.multi_dof_joint_trajectory.points.size() - 1))].transforms[0].translation.y;
+		goal_pose_(2) = traj.multi_dof_joint_trajectory.points[(((int)traj.multi_dof_joint_trajectory.points.size() - 1))].transforms[0].rotation.z;
 
 		// prev_point_dist = sqrt(pow(traj.multi_dof_joint_trajectory.points[i-1].transforms[0].translation.x - current_state_(0),2)
 		// 					   + pow(traj.multi_dof_joint_trajectory.points[i-1].transforms[0].translation.y - current_state_(1),2)
@@ -187,13 +190,13 @@ void MPCC::runNode(const ros::TimerEvent &event)
 	}
     // solver optimal control problem
     pd_trajectory_generator_->solveOptimalControlProblem(current_state_,
-                                                                                                             goal_pose_,
-                                                                                                             controlled_velocity_);
-    ROS_INFO_STREAM("Error" << current_state_ - goal_pose_);
+                                                            goal_pose_,
+                                                            controlled_velocity_);
+    // ROS_INFO_STREAM("Error" << current_state_ - goal_po se_);
 
-    // publishes error stamped for plot, trajectory
+    // publishes error stamped for plot, trajectory                                                                 
     //this->publishErrorPose(tf_traget_from_tracking_vector_);
-    //this->publishTrajectory();
+    // this->publishTrajectory();                                                                                                                                          
 
         // publish zero controlled velocity
         if (!tracking_)
@@ -238,11 +241,112 @@ void MPCC::moveitGoalCB()
 		traj = moveit_action_goal_ptr->trajectory;
         tracking_ = false;
 		i=1;
+
+        nav_msgs::Path planner_path;
+        geometry_msgs::PoseStamped planner_pose;
+
+        planner_pose.header.frame_id = "odom";
+        planner_pose.header.stamp = ros::Time::now();
+
+        for (int sample_it = 0 ; sample_it < traj.multi_dof_joint_trajectory.points.size() ; sample_it++){
+            planner_pose.pose.position.x = traj.multi_dof_joint_trajectory.points[sample_it].transforms[0].translation.x;
+            planner_pose.pose.position.y = traj.multi_dof_joint_trajectory.points[sample_it].transforms[0].translation.y;
+            planner_path.poses.push_back(planner_pose);
+        }
+
+        planner_path.header.frame_id = "odom";
+        planner_path.header.stamp = ros::Time::now();
+
+        tr_pub_.publish(planner_path);
+
+        constructClothoid(traj);
+
 		//start trajectory execution
     }
 }
 
-void MPCC::executeTrajectory(const moveit_msgs::RobotTrajectory & traj){
+void MPCC::constructClothoid(const moveit_msgs::RobotTrajectory& trajectory)
+{
+
+    ROS_INFO_STREAM("Constructing clothoid from planned trajectory");
+
+    double clothoidLength = 0;
+    double x0, y0, theta0, x1, y1, theta1;
+    int res, traj_length;
+    uint n_pts = 10;
+
+    traj_length = trajectory.multi_dof_joint_trajectory.points.size();
+
+    std::vector<double> k(traj_length), dk(traj_length), L(traj_length), L_cumul(traj_length);
+
+    // Construct piecewise clothoid from trajectory points and store clothoid parameters
+    for (int traj_it = 0; traj_it < traj_length - 1; traj_it++)
+    {
+        x0 = trajectory.multi_dof_joint_trajectory.points[traj_it].transforms[0].translation.x;
+        y0 = trajectory.multi_dof_joint_trajectory.points[traj_it].transforms[0].translation.y;
+        theta0 = trajectory.multi_dof_joint_trajectory.points[traj_it].transforms[0].rotation.z;
+        
+        x1 = trajectory.multi_dof_joint_trajectory.points[traj_it + 1].transforms[0].translation.x;
+        y1 = trajectory.multi_dof_joint_trajectory.points[traj_it + 1].transforms[0].translation.y;
+        theta1 = trajectory.multi_dof_joint_trajectory.points[traj_it + 1].transforms[0].rotation.z;
+
+        res = Clothoid::buildClothoid(x0, y0, theta0, x1, y1, theta1, k[traj_it], dk[traj_it], L[traj_it]);
+
+        clothoidLength += L[traj_it];
+        L_cumul[traj_it] = clothoidLength;
+
+        // std::cout << x0 << std::endl;
+        // std::cout << y0 << std::endl;
+        // std::cout << theta0 << std::endl << std::endl;
+
+    }
+
+    // // Sample Clothoid for extra points on piecewise clothoid
+    std::vector<double> X_sample(n_pts), Y_sample(n_pts), X_clothoid, Y_clothoid;
+
+    for (int clothoid_it = 0; clothoid_it < traj_length - 1; clothoid_it++)
+    {
+
+        x0 = trajectory.multi_dof_joint_trajectory.points[clothoid_it].transforms[0].translation.x;
+        y0 = trajectory.multi_dof_joint_trajectory.points[clothoid_it].transforms[0].translation.y;
+        theta0 = trajectory.multi_dof_joint_trajectory.points[clothoid_it].transforms[0].rotation.z;
+        
+        res = Clothoid::pointsOnClothoid(x0, y0, theta0, k[clothoid_it], dk[clothoid_it], L[clothoid_it], n_pts, X_sample, Y_sample);
+
+        if (clothoid_it == 0)
+        {
+            X_clothoid = X_sample;
+            Y_clothoid = Y_sample;
+        }
+        else
+        {
+            X_clothoid.insert(X_clothoid.end(), X_sample.begin(), X_sample.end());
+            Y_clothoid.insert(Y_clothoid.end(), Y_sample.begin(), Y_sample.end());
+        }
+
+    }
+
+    // Construct path message from sampled points
+
+    nav_msgs::Path clothoid_path;
+    geometry_msgs::PoseStamped clothoid_pose;
+
+    clothoid_pose.header.frame_id = "odom";
+    clothoid_pose.header.stamp = ros::Time::now();
+
+    for (int sample_it = 0 ; sample_it < X_clothoid.size() ; sample_it++){
+        clothoid_pose.pose.position.x = X_clothoid[sample_it];
+        clothoid_pose.pose.position.y = Y_clothoid[sample_it];
+        clothoid_path.poses.push_back(clothoid_pose);
+    }
+
+    clothoid_path.header.frame_id = "odom";
+    clothoid_path.header.stamp = ros::Time::now();
+
+    clothoid_pub_.publish(clothoid_path);
+}
+
+void MPCC::executeTrajectory(const moveit_msgs::RobotTrajectory& traj){
 
 }
 
@@ -477,7 +581,7 @@ void MPCC::publishTrajectory()
     marker.color.b = 0.0;
 
     //header
-    marker.header.frame_id = ""; //To be defined controller_config_->;
+    marker.header.frame_id = "odom"; //To be defined controller_config_->;
     //marker.header.stamp = ros::Time(0).now();
 
     // convert pose from eigen vector

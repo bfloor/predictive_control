@@ -1,0 +1,2 @@
+/usr/bin/ar cr libg1fitting.a  CMakeFiles/g1fitting.dir/Clothoid.cpp.o
+/usr/bin/ranlib libg1fitting.a

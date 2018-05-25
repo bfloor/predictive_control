@@ -1,0 +1,36 @@
+#IncludeRegexLine: ^[ 	]*#[ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/boaz/workspace/src/predictive_control/include/g1fitting/Clothoid.h
+cmath
+-
+sstream
+-
+stdexcept
+-
+vector
+-
+cmath
+-
+
+/home/boaz/workspace/src/predictive_control/include/g1fitting/test.cpp
+Clothoid.h
+/home/boaz/workspace/src/predictive_control/include/g1fitting/Clothoid.h
+math.h
+-
+cstdio
+-
+iostream
+-
+sstream
+-
+unistd.h
+-
+vector
+-
+

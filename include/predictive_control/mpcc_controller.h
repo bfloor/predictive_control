@@ -36,6 +36,9 @@
 #include <fstream>
 #include <yaml-cpp/yaml.h>
 
+// navigation msgs
+#include <nav_msgs/Path.h>
+
 // predicitve includes
 #include <predictive_control/predictive_configuration.h>
 #include <predictive_control/kinematic_calculations.h>
@@ -54,6 +57,9 @@
 #include <predictive_control/trajAction.h>
 #include <predictive_control/trajActionGoal.h>
 
+// g1fitting library
+// #include <g1fitting/Clothoid.h>
+#include <g1fitting/Clothoid.cpp>
 
 /*
 struct hold_pose
@@ -138,7 +144,7 @@ public:
     ros::Publisher cartesian_error_pub_;
 
     // publish trajectory
-    ros::Publisher traj_pub_;
+    ros::Publisher traj_pub_, clothoid_pub_, tr_pub_;
 
 private:
 
@@ -176,6 +182,8 @@ private:
 
 	//MoveIt TRAJECTORY VARIABLE
 	moveit_msgs::RobotTrajectory traj;
+    // Clothoid path
+    nav_msgs::Path clothoid_path_;
 
 	//TRajectory execution variables
 	double next_point_dist, goal_dist, prev_point_dist;
@@ -225,6 +233,8 @@ private:
 	void moveitGoalCB();
     void actionSuccess();
     void actionAbort();
+
+    void constructClothoid(const moveit_msgs::RobotTrajectory& trajectory);
 
     /**
      * @brief spinNode: spin node means ROS is still running

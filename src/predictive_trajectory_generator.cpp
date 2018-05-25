@@ -197,8 +197,8 @@ void pd_frame_tracker::generateCostFunction(OCP &OCP_problem,
       ROS_INFO("pd_frame_tracker::generateCostFunction: use_mayer_term_");
     }
     OCP_problem.minimizeMayerTerm( lsq_state_weight_factors_(0) * ((x(0) - goal_pose(0)) * (x(0) - goal_pose(0)))
-                                             + lsq_state_weight_factors_(1) * ((x(1) - goal_pose(1)) * (x(1) - goal_pose(1)))
-                                             + lsq_state_weight_factors_(2) * ((x(2) - goal_pose(2)) * (x(2) - goal_pose(2)))
+                                     + lsq_state_weight_factors_(1) * ((x(1) - goal_pose(1)) * (x(1) - goal_pose(1)))
+                                     + lsq_state_weight_factors_(2) * ((x(2) - goal_pose(2)) * (x(2) - goal_pose(2)))
                                      + lsq_control_weight_factors_(0) * (v.transpose() * v)
                                   );
 
