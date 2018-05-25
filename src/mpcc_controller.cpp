@@ -242,8 +242,7 @@ void MPCC::moveitGoalCB()
         tracking_ = false;
 		i=1;
 
-        // publishPathFromTrajectory(traj);
-
+        // publishPathFromTrajectory(traj)
     }
 
 }
