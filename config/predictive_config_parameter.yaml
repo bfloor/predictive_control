@@ -11,8 +11,8 @@ plotting_result: true
 clock_frequency: 50
 
 #Optimal control problem dimensions
-state_dim: 4
-control_dim: 2
+state_dim: 5
+control_dim: 3
 
 #Inputs and output topics topic
 output_cmd: '/jackal_velocity_controller/cmd_vel'
@@ -60,4 +60,4 @@ acado_config:
                 [5.0, 5.0, 5.0, 5.0]
            lsq_control_weight_factors:
                 # same as degree of freedom
-                [5.0, 5.0]
+                [5.0, 5.0, 1000]

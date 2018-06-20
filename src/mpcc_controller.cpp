@@ -145,7 +145,7 @@ bool MPCC::initialize()
 		idy = 1;
 		epsilon_ = 0.01;
 
-		//Initialize obstacles
+		//Initialize obstacles far away
 		obstacle_feed::Obstacle obstacle_init;
 		obstacle_feed::Obstacles obstacles_init;
 

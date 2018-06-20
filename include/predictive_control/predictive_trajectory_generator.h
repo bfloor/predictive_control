@@ -69,8 +69,8 @@ public:
   /**
    * @brief pd_frame_tracker: Default constructor, allocate memory
    */
-   pd_frame_tracker(): x_("", 4, 1),
-	v_("",2,1){};
+   pd_frame_tracker(): x_("", 5, 1),
+	v_("",3,1){};
 
    /**
     *@brief ~pd_frame_tracker: Default distructor, free memory
@@ -184,6 +184,7 @@ private:
     DifferentialEquation f;
 	DifferentialState x_;       // position
 	Control v_;            // velocities
+    Control slack_;
 
 
    /**
@@ -198,11 +199,13 @@ private:
    void generateCostFunction(OCP& OCP_problem,
 							 const DifferentialState& x,
 							 const Control& v,
+							 const Control& slack,
 							 const Eigen::Vector3d& goal_pose
    );
 
 	void iniKinematics(const DifferentialState& x,
-							   const Control& v
+                       const Control& v,
+                       const Control& slack
 	);
 
 	void path_function_spline_direct(OCP& OCP_problem,
@@ -229,6 +232,7 @@ private:
 
    void setCollisionConstraints(OCP& OCP_problem,
                                 const DifferentialState& x,
+                                const Control& slack,
                                 const obstacle_feed::Obstacles& obstacles,
                                 const double& delta_t
                                 );

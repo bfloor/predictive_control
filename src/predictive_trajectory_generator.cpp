@@ -84,7 +84,7 @@ bool pd_frame_tracker::initialize()
 
 	//move to a kinematic function
 	// Differential Kinematic
-	iniKinematics(x_,v_);
+	iniKinematics(x_,v_,slack_);
 	s_ = 0;
 
   // Initialize parameters concerning obstacles
@@ -94,7 +94,7 @@ bool pd_frame_tracker::initialize()
   return true;
 }
 
-void pd_frame_tracker::iniKinematics(const DifferentialState& x, const Control& v){
+void pd_frame_tracker::iniKinematics(const DifferentialState& x, const Control& v, const Control& slack){
 
 	ROS_WARN("pd_frame_tracker::iniKinematics");
 
@@ -103,6 +103,7 @@ void pd_frame_tracker::iniKinematics(const DifferentialState& x, const Control& 
 	f << dot(x(1)) == v(0)*sin(x(2));
 	f << dot(x(2)) == v(1);
 	f << dot(x(3)) == v(0);
+	f << dot(x(4)) == slack;    // Add dummy state to constraint slack variable
 }
 
 // calculate quternion product
@@ -204,7 +205,7 @@ void pd_frame_tracker::generateCollisionCostFunction(OCP& OCP_problem,
 
 }
 
-void pd_frame_tracker::setCollisionConstraints(OCP& OCP_problem, const DifferentialState& x, const obstacle_feed::Obstacles& obstacles, const double& delta_t){
+void pd_frame_tracker::setCollisionConstraints(OCP& OCP_problem, const DifferentialState& x, const Control& slack, const obstacle_feed::Obstacles& obstacles, const double& delta_t){
 
     for (int obst_it = 0; obst_it < n_obstacles_; obst_it++) {
         Expression x_obst = obstacles.Obstacles[obst_it].pose.position.x;
@@ -233,7 +234,8 @@ void pd_frame_tracker::setCollisionConstraints(OCP& OCP_problem, const Different
         Expression c_k;
         c_k = deltaPos.transpose() * R_obst.transpose() * ab_mat * R_obst * deltaPos;
 
-        OCP_problem.subjectTo(c_k >= 1);
+        OCP_problem.subjectTo(c_k + slack>= 1);
+//        OCP_problem.subjectTo(c_k >= 1);
     }
 }
 
@@ -287,6 +289,7 @@ void pd_frame_tracker::path_function_spline_direct(OCP& OCP_problem,
 void pd_frame_tracker::generateCostFunction(OCP& OCP_problem,
 											const DifferentialState &x,
                                             const Control &v,
+                                            const Control& slack,
                                             const Eigen::Vector3d& goal_pose)
 {
   if (use_mayer_term_)
@@ -296,9 +299,10 @@ void pd_frame_tracker::generateCostFunction(OCP& OCP_problem,
       ROS_INFO("pd_frame_tracker::generateCostFunction: use_mayer_term_");
     }
 	  Expression sqp = (lsq_state_weight_factors_(0) * ( (x(0) - goal_pose(0)) * (x(0) - goal_pose(0)) )
-						+(lsq_state_weight_factors_(1) * ( (x(1) - goal_pose(1)) * (x(1) - goal_pose(1))))
-						+lsq_state_weight_factors_(2) * ( (x(2) - goal_pose(2)) * (x(2) - goal_pose(2))))
-					   + lsq_control_weight_factors_(0) * (v.transpose() * v);
+						+ (lsq_state_weight_factors_(1) * ( (x(1) - goal_pose(1)) * (x(1) - goal_pose(1))))
+						+ lsq_state_weight_factors_(2) * ( (x(2) - goal_pose(2)) * (x(2) - goal_pose(2))))
+					    + lsq_control_weight_factors_(0) * (v.transpose() * v)
+                        + lsq_control_weight_factors_(2) * (slack*slack);
 
 	  OCP_problem.minimizeMayerTerm( sqp );
 
@@ -326,6 +330,7 @@ void pd_frame_tracker::solveOptimalControlProblem(const Eigen::VectorXd &last_po
 	// control initialize with previous command
 	control_initialize_(0) = controlled_velocity.linear.x;
 	control_initialize_(1) = controlled_velocity.angular.z;
+	control_initialize_(2) = 0;
 
 	// state initialize
 	state_initialize_(0) = last_position(0);
@@ -341,12 +346,14 @@ void pd_frame_tracker::solveOptimalControlProblem(const Eigen::VectorXd &last_po
 
 	//Equal constraints
 	OCP_problem_.subjectTo(f);
+	//Constraint on the dummy state that holds the slack variable
+//	OCP_problem_.subjectTo(0 , x_(4) , 0.3);
 
   // generate cost function
-  generateCostFunction(OCP_problem_, x_, v_, goal_pose);
+  generateCostFunction(OCP_problem_, x_, v_, slack_, goal_pose);
   //path_function_spline_direct(OCP_problem_, x_, v_, goal_pose);
 
-  setCollisionConstraints(OCP_problem_, x_, obstacles_, discretization_intervals_);
+  setCollisionConstraints(OCP_problem_, x_, slack_, obstacles_, discretization_intervals_);
 
   // Optimal Control Algorithm
   RealTimeAlgorithm OCP_solver(OCP_problem_, 0.025); // 0.025 sampling time
@@ -382,6 +389,7 @@ void pd_frame_tracker::solveOptimalControlProblem(const Eigen::VectorXd &last_po
 	// Clear state, control variable
 	//clearAllStaticCounters();
 
+    slack_.print(std::cout);
 }
 
 // setup acado algorithm options, need to set solver when calling this function
