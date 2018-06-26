@@ -145,30 +145,6 @@ bool MPCC::initialize()
 		idy = 1;
 		epsilon_ = 0.01;
 
-		//Initialize obstacles
-		obstacle_feed::Obstacle obstacle_init;
-
-        std_msgs::Header obst_header_init;
-
-        obst_header_init.stamp = ros::Time::now();
-        obst_header_init.frame_id = controller_config_->robot_base_link_;
-
-        for (int it_obst = 0; it_obst < controller_config_->n_obstacles_; it_obst++)
-        {
-            obstacle_init.pose.orientation.z = 0;
-            obstacle_init.pose.position.x = 1000;
-            obstacle_init.pose.position.y = 1000;
-            obstacle_init.minor_semiaxis = 0.01;
-            obstacle_init.major_semiaxis = 0.01;
-
-            obstacles_init_.header = obst_header_init;
-            obstacles_init_.Obstacles.push_back(obstacle_init);
-        }
-
-        obstacles_ = obstacles_init_;
-
-        std::cout << "initialized " << obstacles_.Obstacles.size() << " obstacles" << std::endl;
-
 		moveit_msgs::RobotTrajectory j;
 		traj = j;
 		//initialize trajectory variable to plot prediction trajectory
@@ -211,7 +187,6 @@ void MPCC::runNode(const ros::TimerEvent &event)
 
 
             //publishPathFromTrajectory(traj);
-
 
 			// publish zero controlled velocity
 			if (!tracking_)
@@ -298,14 +273,8 @@ void MPCC::StateCallBack(const geometry_msgs::Pose::ConstPtr& msg)
 
 void MPCC::ObstacleCallBack(const obstacle_feed::Obstacles& obstacles)
 {
-    geometry_msgs::PoseStamped stampedpose;
-    stampedpose.header.frame_id = obstacles.header.frame_id;
-    stampedpose.header.stamp = ros::Time::now();
-    obstacle_feed::Obstacles obstacles_temp;
 
-    obstacles_temp = obstacles_init_;
-    obstacles_temp = obstacles;
-    obstacles_ = obstacles_temp;
+    obstacles_ = obstacles;
 
 }
 
@@ -351,7 +320,6 @@ void MPCC::publishTrajectory()
 {
     geometry_msgs::Pose pose;
     visualization_msgs::Marker marker;
-
 
     marker.type = visualization_msgs::Marker::SPHERE;
     //marker.lifetime = ros::Duration(5.0);

@@ -224,12 +224,13 @@ void pd_frame_tracker::generateCollisionCostFunction(OCP& OCP_problem,
 
 }
 
-void pd_frame_tracker::setCollisionConstraints(OCP& OCP_problem, const DifferentialState& x, const obstacle_feed::Obstacles& obstacles, const double& delta_t){
+void pd_frame_tracker::setCollisionConstraints(OCP& OCP_problem, const DifferentialState& x, const obstacle_feed::Obstacles& obstacles, const double& delta_t) {
 
-    // Iterate over all obstacles
-    for (int obst_it = 0; obst_it < n_obstacles_; obst_it++) {
+
+    // Iterate over all given obstacles upto defined bound
+    for (int obst_it = 0; obst_it < obstacles.Obstacles.size(); obst_it++) {
         // Iterate over all ego-vehicle discs
-        for (int discs_it = 0; discs_it < predictive_configuration::n_discs_; discs_it++) {
+        for (int discs_it = 0; discs_it < predictive_configuration::n_discs_ && obst_it < n_obstacles_; discs_it++) {
 
             // Expression for position of obstacle
             double x_obst = obstacles.Obstacles[obst_it].pose.position.x;
@@ -247,11 +248,6 @@ void pd_frame_tracker::setCollisionConstraints(OCP& OCP_problem, const Different
 
             deltaPos(0) = x(0) - x_obst;
             deltaPos(1) = x(1) - y_obst;
-
-//            deltaPos(0) = deltaPos(0).getEuclideanNorm();
-//            deltaPos(1) = deltaPos(1).getEuclideanNorm();
-//            deltaPos(0) = x_obst - x(0);
-//            deltaPos(1) = y_obst - x(1);
 
             // Rotation matrix corresponding to the obstacle heading
             Expression R_obst(2, 2);
