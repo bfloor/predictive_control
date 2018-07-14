@@ -78,12 +78,8 @@
 
 //Joint states
 #include <sensor_msgs/JointState.h>
-/*
-struct hold_pose
-{
-    bool hold_success_;
-    Eigen::VectorXd pose_hold_vector_;
-};*/
+//splines
+#include <tkspline/spline.h>
 
 class MPCC
 {
@@ -192,10 +188,11 @@ public:
     ros::Publisher cartesian_error_pub_;
 
     // publish trajectory
-    ros::Publisher traj_pub_, tr_path_pub_, pred_traj_pub_, pred_cmd_pub_,cost_pub_,robot_collision_space_pub_;
+    ros::Publisher traj_pub_, tr_path_pub_, pred_traj_pub_, pred_cmd_pub_,cost_pub_,robot_collision_space_pub_, spline_traj_pub_;
 	//Predicted trajectory
 	nav_msgs::Path pred_traj_;
 	nav_msgs::Path pred_cmd_;
+	nav_msgs::Path spline_traj_;
 
 	//Controller options
 	bool enable_output_;
@@ -204,6 +201,13 @@ public:
 
 	tf2_ros::TransformBroadcaster state_pub_;
 	std_msgs::Float64 cost_;
+
+	//Spline trajectory generation
+	tk::spline ref_path_x, ref_path_y;
+
+	//MPCC Implementation
+	std::vector<double> X, Y, S;
+
 private:
 
     ros::NodeHandle nh;
@@ -321,6 +325,8 @@ private:
 	 * @brief publishPredictedTrajectory: publish predicted trajectory
 	 */
 	void publishPredictedTrajectory(void);
+
+	void publishSplineTrajectory(void);
 
 	void publishPredictedOutput(void);
 

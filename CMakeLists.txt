@@ -135,7 +135,8 @@ target_include_directories(predictive_controller PUBLIC
 add_executable(predictive_control_node src/predictive_control_node.cpp)
 target_link_libraries(predictive_control_node
         predictive_controller
-        ${catkin_LIBRARIES})
+        ${catkin_LIBRARIES}
+        tkspline_lib)
 
 add_dependencies(predictive_control_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
