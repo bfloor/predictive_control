@@ -188,12 +188,12 @@ public:
     ros::Publisher cartesian_error_pub_;
 
     // publish trajectory
-    ros::Publisher traj_pub_, tr_path_pub_, pred_traj_pub_, pred_cmd_pub_,cost_pub_,robot_collision_space_pub_, spline_traj_pub_;
+    ros::Publisher traj_pub_, tr_path_pub_, pred_traj_pub_, pred_cmd_pub_,cost_pub_,robot_collision_space_pub_, spline_traj_pub_,spline_traj_pub2_;
 	//Predicted trajectory
 	nav_msgs::Path pred_traj_;
 	nav_msgs::Path pred_cmd_;
-	nav_msgs::Path spline_traj_;
-
+	nav_msgs::Path spline_traj_,spline_traj2_;
+	int traj_i;
 	//Controller options
 	bool enable_output_;
 	int n_iterations_;
@@ -327,6 +327,8 @@ private:
 	void publishPredictedTrajectory(void);
 
 	void publishSplineTrajectory(void);
+
+	void publishAnaliticSplineTrajectory(void);
 
 	void publishPredictedOutput(void);
 

@@ -113,7 +113,8 @@ bool MPCC::initialize()
 		traj = j;
 
 		//initialize trajectory variable to plot prediction trajectory
-		spline_traj_.poses.resize(ACADO_N);
+		spline_traj_.poses.resize(ACADO_N*2);
+		spline_traj2_.poses.resize(ACADO_N);
 		pred_traj_.poses.resize(ACADO_N);
 		pred_cmd_.poses.resize(ACADO_N);
 		pred_traj_.header.frame_id = "odom";
@@ -124,6 +125,7 @@ bool MPCC::initialize()
 
 		pred_traj_pub_ = nh.advertise<nav_msgs::Path>("mpc_horizon",1);
 		spline_traj_pub_ = nh.advertise<nav_msgs::Path>("spline_traj",1);
+		spline_traj_pub2_ = nh.advertise<nav_msgs::Path>("spline_traj2",1);
 
 		// Initialize pregenerated mpc solver
 		acado_initializeSolver( );
@@ -178,10 +180,10 @@ bool MPCC::initialize()
 		acado_initializeSolver( );
 
 		//MPCC variables
-		X.resize(4);
-		Y.resize(4);
-		S.resize(4);
-
+		X.resize(3);
+		Y.resize(3);
+		S.resize(3);
+		traj_i =0;
 		ROS_WARN("PREDICTIVE CONTROL INTIALIZED!!");
 		return true;
 	}
@@ -276,19 +278,19 @@ void MPCC::runNode(const ros::TimerEvent &event)
         for (N_iter = 0; N_iter < ACADO_N; N_iter++) {
 
             // Initialize Online Data variables
-            acadoVariables.od[(ACADO_NOD * N_iter) + 0] = ref_path_x.m_a[0];        // spline coefficients
-            acadoVariables.od[(ACADO_NOD * N_iter) + 1] = ref_path_x.m_b[0];
-			acadoVariables.od[(ACADO_NOD * N_iter) + 2] = ref_path_x.m_c[0];        // spline coefficients
-			acadoVariables.od[(ACADO_NOD * N_iter) + 3] = ref_path_x.m_d[0];
-			acadoVariables.od[(ACADO_NOD * N_iter) + 4] = ref_path_y.m_a[0];        // spline coefficients
-			acadoVariables.od[(ACADO_NOD * N_iter) + 5] = ref_path_y.m_b[0];
-			acadoVariables.od[(ACADO_NOD * N_iter) + 6] = ref_path_y.m_c[0];        // spline coefficients
-			acadoVariables.od[(ACADO_NOD * N_iter) + 7] = ref_path_y.m_d[0];
+            acadoVariables.od[(ACADO_NOD * N_iter) + 0] = ref_path_x.m_a[traj_i];        // spline coefficients
+            acadoVariables.od[(ACADO_NOD * N_iter) + 1] = ref_path_x.m_b[traj_i];
+			acadoVariables.od[(ACADO_NOD * N_iter) + 2] = ref_path_x.m_c[traj_i];        // spline coefficients
+			acadoVariables.od[(ACADO_NOD * N_iter) + 3] = ref_path_x.m_d[traj_i];
+			acadoVariables.od[(ACADO_NOD * N_iter) + 4] = ref_path_y.m_a[traj_i];        // spline coefficients
+			acadoVariables.od[(ACADO_NOD * N_iter) + 5] = ref_path_y.m_b[traj_i];
+			acadoVariables.od[(ACADO_NOD * N_iter) + 6] = ref_path_y.m_c[traj_i];        // spline coefficients
+			acadoVariables.od[(ACADO_NOD * N_iter) + 7] = ref_path_y.m_d[traj_i];
 			acadoVariables.od[(ACADO_NOD * N_iter) + 8 ] = cost_state_weight_factors_(0);       // weight factor on x
 			acadoVariables.od[(ACADO_NOD * N_iter) + 9 ] = cost_state_weight_factors_(1);       // weight factor on y
-			acadoVariables.od[(ACADO_NOD * N_iter) + 10 ] = cost_state_weight_factors_(2);       // weight factor on theta
-			acadoVariables.od[(ACADO_NOD * N_iter) + 11 ] = cost_control_weight_factors_(0);     // weight factor on v
-			acadoVariables.od[(ACADO_NOD * N_iter) + 12 ] = cost_control_weight_factors_(1);     // weight factor on w
+			acadoVariables.od[(ACADO_NOD * N_iter) + 10 ] = cost_control_weight_factors_(0);       // weight factor on theta
+			acadoVariables.od[(ACADO_NOD * N_iter) + 11 ] = cost_control_weight_factors_(1);     // weight factor on v
+			acadoVariables.od[(ACADO_NOD * N_iter) + 12 ] = cost_state_weight_factors_(2);     // weight factor on w
         }
 
         acadoVariables.x0[ 0 ] = current_state_(0);
@@ -302,7 +304,7 @@ void MPCC::runNode(const ros::TimerEvent &event)
 
         controlled_velocity_.linear.x = acadoVariables.u[0];
         controlled_velocity_.angular.z = acadoVariables.u[1];
-
+		printf("\tReal-Time Iteration:  Path distance = %.3e\n\n", acadoVariables.x[ACADO_NX+3]);
         printf("\tReal-Time Iteration:  KKT Tolerance = %.3e\n\n", acado_getKKT());
 
 		int j=1;
@@ -321,7 +323,7 @@ void MPCC::runNode(const ros::TimerEvent &event)
         publishPredictedTrajectory();
 		publishPredictedCollisionSpace();
 		publishPredictedOutput();
-
+		publishAnaliticSplineTrajectory();
 		cost_.data = acado_getObjective();
 		publishCost();
 		real_t te = acado_toc(&t);
@@ -410,7 +412,7 @@ void MPCC::moveitGoalCB()
 		S[0] = 0;
 		S[1] = 10;
 		S[2] = 20;
-		S[3] = 30;
+
 		ref_path_x.set_points(S, X);
 		ref_path_y.set_points(S, Y);
 
@@ -523,7 +525,14 @@ void MPCC::publishSplineTrajectory(void)
 		spline_traj_.poses[i].pose.position.y = ref_path_y(1.0*i*S[1]/ACADO_N); //y
 
 	}
-	/*ROS_INFO_STREAM("REF_PATH_X size:  " << ref_path_x.m_a.size());
+
+	for (int i = ACADO_N; i < 2*ACADO_N; i++)
+	{
+		spline_traj_.poses[i].pose.position.x = ref_path_x(1.0*(i-ACADO_N)*S[1]/ACADO_N+10); //x
+		spline_traj_.poses[i].pose.position.y = ref_path_y(1.0*(i-ACADO_N)*S[1]/ACADO_N+10); //y
+
+	}
+	ROS_INFO_STREAM("REF_PATH_X size:  " << ref_path_x.m_a.size());
 	for(int i =0; i< ref_path_x.m_a.size();i++){
 		ROS_INFO_STREAM("REF_PATH_Xa:  " << i << "  " << ref_path_x.m_a[i]);
 		ROS_INFO_STREAM("REF_PATH_Xb:  " << i << "  " << ref_path_x.m_b[i]);
@@ -534,8 +543,24 @@ void MPCC::publishSplineTrajectory(void)
 		ROS_INFO_STREAM("REF_PATH_Yc:  " << i << "  " << ref_path_y.m_c[i]);
 		ROS_INFO_STREAM("REF_PATH_Yd:  " << i << "  " << ref_path_y.m_d[i]);
 	}
-*/
+
 	spline_traj_pub_.publish(spline_traj_);
+}
+
+void MPCC::publishAnaliticSplineTrajectory(void)
+{
+	spline_traj2_.header.stamp = ros::Time::now();
+	spline_traj2_.header.frame_id = controller_config_->tracking_frame_;
+	double s;
+	for (int i = 0; i < ACADO_N; i++)
+	{
+		s= 1.0*i*S[1]/ACADO_N;
+		spline_traj2_.poses[i].pose.position.x = ref_path_x.m_a[0]*s*s*s+ref_path_x.m_b[0]*s*s+ref_path_x.m_c[0]*s+ref_path_x.m_d[0]; //x
+		spline_traj2_.poses[i].pose.position.y = ref_path_y.m_a[0]*s*s*s+ref_path_y.m_b[0]*s*s+ref_path_y.m_c[0]*s+ref_path_y.m_d[0]; //y
+
+	}
+
+	spline_traj_pub2_.publish(spline_traj2_);
 }
 
 void MPCC::publishPredictedTrajectory(void)
