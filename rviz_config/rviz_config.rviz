@@ -11,6 +11,7 @@ Panels:
         - /MarkerArray2
         - /MarkerArray3
         - /Path3
+        - /Axes3
       Splitter Ratio: 0.5
     Tree Height: 124
   - Class: rviz/Selection
@@ -420,6 +421,13 @@ Visualization Manager:
       Topic: /spline_traj2
       Unreliable: false
       Value: true
+    - Class: rviz/Axes
+      Enabled: true
+      Length: 1
+      Name: Axes
+      Radius: 0.100000001
+      Reference Frame: path
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -445,7 +453,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 3.18068457
+      Distance: 7.87525702
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.0599999987
         Stereo Focal Distance: 1

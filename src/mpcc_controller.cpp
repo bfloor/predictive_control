@@ -214,6 +214,27 @@ void MPCC::computeEgoDiscs()
     ROS_WARN_STREAM("Generated " << n_discs <<  " ego-vehicle discs with radius " << r_discs_ );
 }
 
+void MPCC::broadcastPathPose(){
+
+	geometry_msgs::TransformStamped transformStamped;
+	transformStamped.header.stamp = ros::Time::now();
+	transformStamped.header.frame_id = "odom";
+	transformStamped.child_frame_id = "path";
+
+	transformStamped.transform.translation.x = ref_path_x(acadoVariables.x[3]);
+	transformStamped.transform.translation.y = ref_path_y(acadoVariables.x[3]);
+	transformStamped.transform.translation.z = 0.0;
+	tf::Quaternion q = tf::createQuaternionFromRPY(0, 0, pred_traj_.poses[1].pose.orientation.z);
+	transformStamped.transform.rotation.x = 0;
+	transformStamped.transform.rotation.y = 0;
+	transformStamped.transform.rotation.z = 0;
+	transformStamped.transform.rotation.w = 1;
+
+
+	path_pose_pub_.sendTransform(transformStamped);
+
+}
+
 void MPCC::broadcastTF(){
 
 	geometry_msgs::TransformStamped transformStamped;
@@ -225,10 +246,10 @@ void MPCC::broadcastTF(){
 		transformStamped.transform.translation.y = current_state_(1);
 		transformStamped.transform.translation.z = 0.0;
 		tf::Quaternion q = tf::createQuaternionFromRPY(0, 0, pred_traj_.poses[1].pose.orientation.z);
-		transformStamped.transform.rotation.x = 0;
-		transformStamped.transform.rotation.y = 0;
-		transformStamped.transform.rotation.z = 0;
-		transformStamped.transform.rotation.w = 1;
+		transformStamped.transform.rotation.x = q.x();
+		transformStamped.transform.rotation.y = q.y();
+		transformStamped.transform.rotation.z = q.z();
+		transformStamped.transform.rotation.w = q.w();
 	}
 
 	else{
@@ -274,7 +295,8 @@ void MPCC::runNode(const ros::TimerEvent &event)
 
         acadoVariables.u[0] = controlled_velocity_.linear.x;
         acadoVariables.u[1] = controlled_velocity_.angular.z;
-
+		if(acadoVariables.x[3]>10)
+			traj_i=1;
         for (N_iter = 0; N_iter < ACADO_N; N_iter++) {
 
             // Initialize Online Data variables
@@ -324,6 +346,7 @@ void MPCC::runNode(const ros::TimerEvent &event)
 		publishPredictedCollisionSpace();
 		publishPredictedOutput();
 		publishAnaliticSplineTrajectory();
+		broadcastPathPose();
 		cost_.data = acado_getObjective();
 		publishCost();
 		real_t te = acado_toc(&t);
@@ -378,18 +401,6 @@ void MPCC::moveitGoalCB()
         goal_pose_(2) = traj.multi_dof_joint_trajectory.points[traj_n - 1].transforms[0].rotation.z;
         
         acado_initializeSolver( );
-
-        int N_iter;
-        for (N_iter = 0; N_iter < ACADO_N; N_iter++) {
-
-            // Initialize Online Data variables
-            acadoVariables.od[(ACADO_NOD * N_iter) + 8 ] = cost_state_weight_factors_(0);       // weight factor on x
-            acadoVariables.od[(ACADO_NOD * N_iter) + 9 ] = cost_state_weight_factors_(1);       // weight factor on y
-            acadoVariables.od[(ACADO_NOD * N_iter) + 10 ] = cost_state_weight_factors_(2);       // weight factor on theta
-            acadoVariables.od[(ACADO_NOD * N_iter) + 11 ] = cost_control_weight_factors_(0);     // weight factor on v
-            acadoVariables.od[(ACADO_NOD * N_iter) + 12 ] = cost_control_weight_factors_(1);     // weight factor on w
-
-        }
 /*
 		X[0] = traj.multi_dof_joint_trajectory.points[0].transforms[0].translation.x;
 		X[1] = traj.multi_dof_joint_trajectory.points[1].transforms[0].translation.x;

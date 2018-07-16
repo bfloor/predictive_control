@@ -199,7 +199,7 @@ public:
 	int n_iterations_;
 	bool simulation_mode_;
 
-	tf2_ros::TransformBroadcaster state_pub_;
+	tf2_ros::TransformBroadcaster state_pub_, path_pose_pub_;
 	std_msgs::Float64 cost_;
 
 	//Spline trajectory generation
@@ -339,6 +339,8 @@ private:
     void publishPathFromTrajectory(const moveit_msgs::RobotTrajectory& traj);
 
 	void broadcastTF();
+
+	void broadcastPathPose();
 
     /**
      * @brief clearDataMember: clear vectors means free allocated memory
