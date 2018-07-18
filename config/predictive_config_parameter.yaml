@@ -8,7 +8,7 @@ activate_controller_node_output: true
 plotting_result: true
 
 # Clock frequency //hz
-clock_frequency: 5
+clock_frequency: 20
 
 #Optimal control problem dimensions
 state_dim: 3
@@ -64,10 +64,10 @@ acado_config:
      weight_factors:
            lsq_state_weight_factors:
                 #always 6 component 3 linear/position and 3 angular/Euler angle
-                [10.0, 40.0, 3.0]
+                [1.0, 1.0, 1.0]
            lsq_control_weight_factors:
                 # same as degree of freedom
-                [2.0, 2.0]
+                [1.0, 1.0]
            lsq_state_terminal_weight_factors:
                 #always 6 component 3 linear/position and 3 angular/Euler angle
-                [10.0, 40.0, 3.0]
+                [0.0, 0.0, 0.0]

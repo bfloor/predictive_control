@@ -159,8 +159,8 @@ bool MPCC::initialize()
 		computeEgoDiscs();
 
 		//Controller options
-		enable_output_ = true;
-		n_iterations_ = 1;
+		enable_output_ = false;
+		n_iterations_ = 100;
 		simulation_mode_ = true;
 
 		//Plot variables
@@ -282,16 +282,26 @@ void MPCC::runNode(const ros::TimerEvent &event)
 
     obstacle_feed::Obstacles obstacles = obstacles_;
 
-    acado_initializeSolver( );
+    //acado_initializeSolver( );
 
     int traj_n = traj.multi_dof_joint_trajectory.points.size();
 	if(!simulation_mode_)
 		broadcastTF();
-    if (traj_n > 0) {
+    if (traj_n>0) {
+		acado_initializeSolver( );
         acadoVariables.x[0] = current_state_(0);
         acadoVariables.x[1] = current_state_(1);
         acadoVariables.x[2] = current_state_(2);
-        acadoVariables.x[3] = acadoVariables.x[ACADO_NX+3];
+		if(idx ==1) {
+			double smin;
+			//ROS_INFO_STREAM("Actual S: " << acadoVariables.x[ACADO_NX + 3]);
+			smin = spline_closest_point(0, 100, acadoVariables.x[ACADO_NX + 3], 0.5, 20);
+			acadoVariables.x[3] = smin;
+			//ROS_INFO_STREAM("Actual S: " << smin);
+			//acadoVariables.x[3] =acadoVariables.x[ACADO_NX + 3];
+		}
+		else
+			acadoVariables.x[3] = acadoVariables.x[3];
 
         acadoVariables.u[0] = controlled_velocity_.linear.x;
         acadoVariables.u[1] = controlled_velocity_.angular.z;
@@ -318,14 +328,12 @@ void MPCC::runNode(const ros::TimerEvent &event)
         acadoVariables.x0[ 0 ] = current_state_(0);
         acadoVariables.x0[ 1 ] = current_state_(1);
         acadoVariables.x0[ 2 ] = current_state_(2);
-        acadoVariables.x0[ 3 ] = acadoVariables.x[ACADO_NX+3];
+		acadoVariables.x0[ 3 ] = acadoVariables.x[3];
 
         acado_preparationStep();
 
         acado_feedbackStep();
 
-        controlled_velocity_.linear.x = acadoVariables.u[0];
-        controlled_velocity_.angular.z = acadoVariables.u[1];
 		printf("\tReal-Time Iteration:  Path distance = %.3e\n\n", acadoVariables.x[ACADO_NX+3]);
         printf("\tReal-Time Iteration:  KKT Tolerance = %.3e\n\n", acado_getKKT());
 
@@ -336,12 +344,13 @@ void MPCC::runNode(const ros::TimerEvent &event)
 
             acado_feedbackStep();
 
-            controlled_velocity_.linear.x = acadoVariables.u[0];
-            controlled_velocity_.angular.z = acadoVariables.u[1];
-
             printf("\tReal-Time Iteration:  KKT Tolerance = %.3e\n\n", acado_getKKT());
 			j++;    //        acado_printDifferentialVariables();
         }
+
+		controlled_velocity_.linear.x = acadoVariables.u[0];
+		controlled_velocity_.angular.z = acadoVariables.u[1];
+
         publishPredictedTrajectory();
 		publishPredictedCollisionSpace();
 		publishPredictedOutput();
@@ -357,12 +366,40 @@ void MPCC::runNode(const ros::TimerEvent &event)
         {
             actionSuccess();
         }
+	}
+    if(!enable_output_) {
+		publishZeroJointVelocity();
+		idx = 2; // used to keep computation of the mpc and dod not let it move because we set the initial state as the predicted state
+	}
+	else {
+		idx=1;
+		controlled_velocity_pub_.publish(controlled_velocity_);
+	}
 
-        if(!enable_output_)
-			publishZeroJointVelocity();
-		else
-        	controlled_velocity_pub_.publish(controlled_velocity_);
-    }
+}
+
+double MPCC::spline_closest_point(double s_min, double s_max, double s_guess, double window, int n_tries){
+
+	double lower = std::max(s_min, s_guess-window);
+	double upper = std::min(s_max, s_guess + window);
+	double s_i=lower,spline_pos_x_i,spline_pos_y_i;
+	double dist_i,min_dist,smin;
+	spline_pos_x_i = ref_path_x(s_i);
+	spline_pos_y_i = ref_path_y(s_i);
+	min_dist = std::sqrt((spline_pos_x_i-current_state_(0))*(spline_pos_x_i-current_state_(0))+(spline_pos_y_i-current_state_(1))*(spline_pos_y_i-current_state_(1)));
+	for(int i=0;i<n_tries;i++){
+		s_i = lower+(upper-lower)/n_tries*i;
+		spline_pos_x_i = ref_path_x(s_i);
+		spline_pos_y_i = ref_path_y(s_i);
+		dist_i = std::sqrt((spline_pos_x_i-current_state_(0))*(spline_pos_x_i-current_state_(0))+(spline_pos_y_i-current_state_(1))*(spline_pos_y_i-current_state_(1)));
+		if(dist_i<min_dist){
+			min_dist=dist_i;
+			smin=s_i;
+		}
+		//ROS_INFO_STREAM("s_i: " << s_i << " " << "spline_pos_x_i: " << spline_pos_x_i << " " << "spline_pos_y_i: " << spline_pos_y_i << " " << "dist_i: " << dist_i << " ");
+	}
+	return smin;
+
 }
 
 void MPCC::moveGoalCB()

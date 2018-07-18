@@ -342,6 +342,8 @@ private:
 
 	void broadcastPathPose();
 
+	double spline_closest_point(double s_min, double s_max, double s_guess, double window, int n_tries);
+
     /**
      * @brief clearDataMember: clear vectors means free allocated memory
      */
