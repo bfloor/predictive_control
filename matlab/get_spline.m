@@ -27,7 +27,7 @@ global PLOT_FLAG
     pt = pt';
     
     s = 0:dist:(n_pts-1)*dist;
-    S = spline(s, pt);
+    S = spline(s, pt)
 
     if PLOT_FLAG
         plot(x,y, '*k','LineWidth' ,5 );

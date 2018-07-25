@@ -212,6 +212,9 @@ public:
     double total_length_;
     std::vector<double> ss,xx,yy;
     int n_clothoid,n_pts;
+    //Search window parameters
+    double window_size_;
+    int n_search_points_;
 
 private:
 

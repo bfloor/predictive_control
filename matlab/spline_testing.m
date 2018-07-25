@@ -48,6 +48,13 @@ theta = [0, pi/2, pi/2];
 %% Interpolate generated spline
 
 road_path = ppval(S_road, linspace(0,(n_points_spline-1)*dist_spline_pts,n_points_interpolate));
+j=1;
+for i=0:(n_points_spline-1)*dist_spline_pts:n_points_interpolate
+    road_path(1,j) = S_road.coefs(1)*i^3 + S_road.coefs(2)*i^2 + S_road.coefs(3)*i + S_road.coefs(4);
+    road_path(2,j) = S_road.coefs(1)*i^3 + S_road.coefs(2)*i^2 + S_road.coefs(3)*i + S_road.coefs(4);
+    j=j+1;
+end
+
 M = diag(3:-1:1,1);
 S_ds_road = S_road;
 S_ds_road.coefs = S_ds_road.coefs*M;

@@ -292,19 +292,24 @@ void MPCC::runNode(const ros::TimerEvent &event)
         acadoVariables.x[0] = current_state_(0);
         acadoVariables.x[1] = current_state_(1);
         acadoVariables.x[2] = current_state_(2);
-		if(idx ==1) {
-			double smin;
-			smin = spline_closest_point(0, 100, acadoVariables.x[ACADO_NX + 3], 0.5, 20);
-			acadoVariables.x[3] = smin;
-		}
-		else
-			acadoVariables.x[3] = acadoVariables.x[3];
 
         acadoVariables.u[0] = controlled_velocity_.linear.x;
         acadoVariables.u[1] = controlled_velocity_.angular.z;
 
-		if(acadoVariables.x[3]>ss[traj_i+1]-0.01)
-			traj_i++;
+		if(acadoVariables.x[3]>ss[traj_i+1]) {
+            traj_i++;
+            //acadoVariables.x[3]-=ss[traj_i];
+            ROS_ERROR_STREAM("SWITCH SPLINE " << acadoVariables.x[3]);
+        }
+
+        if(idx ==1) {
+            double smin;
+            smin = spline_closest_point(ss[traj_i], 100, acadoVariables.x[ACADO_NX+3], window_size_, n_search_points_);
+            acadoVariables.x[3] = smin;
+            ROS_ERROR_STREAM("smin: " << smin);
+        }
+        else
+            acadoVariables.x[3] = acadoVariables.x[3];
 
         for (N_iter = 0; N_iter < ACADO_N; N_iter++) {
 
@@ -321,20 +326,21 @@ void MPCC::runNode(const ros::TimerEvent &event)
 			acadoVariables.od[(ACADO_NOD * N_iter) + 9 ] = cost_state_weight_factors_(1);       // weight factor on y
 			acadoVariables.od[(ACADO_NOD * N_iter) + 10 ] = cost_control_weight_factors_(0);       // weight factor on theta
 			acadoVariables.od[(ACADO_NOD * N_iter) + 11 ] = cost_control_weight_factors_(1);     // weight factor on v
-			acadoVariables.od[(ACADO_NOD * N_iter) + 12 ] = cost_state_weight_factors_(2);     // weight factor on w
+			acadoVariables.od[(ACADO_NOD * N_iter) + 12 ] = ss[traj_i];     // weight factor on w
         }
 
         acadoVariables.x0[ 0 ] = current_state_(0);
         acadoVariables.x0[ 1 ] = current_state_(1);
         acadoVariables.x0[ 2 ] = current_state_(2);
 		acadoVariables.x0[ 3 ] = acadoVariables.x[3];
-
+        ROS_INFO_STREAM("ss[traj_i]: " << ss[traj_i]);
+        ROS_INFO_STREAM("acadoVariables.x[3]: " << acadoVariables.x[3]);
         acado_preparationStep();
 
         acado_feedbackStep();
 
-		printf("\tReal-Time Iteration:  Path distance = %.3e\n\n", acadoVariables.x[ACADO_NX+3]);
-        printf("\tReal-Time Iteration:  KKT Tolerance = %.3e\n\n", acado_getKKT());
+		//printf("\tReal-Time Iteration:  Path distance = %.3e\n\n", acadoVariables.x[ACADO_NX+3]);
+        //printf("\tReal-Time Iteration:  KKT Tolerance = %.3e\n\n", acado_getKKT());
 
 		int j=1;
         while (acado_getKKT()> 1e-3 && j<n_iterations_){
@@ -397,6 +403,9 @@ double MPCC::spline_closest_point(double s_min, double s_max, double s_guess, do
 		}
 		//ROS_INFO_STREAM("s_i: " << s_i << " " << "spline_pos_x_i: " << spline_pos_x_i << " " << "spline_pos_y_i: " << spline_pos_y_i << " " << "dist_i: " << dist_i << " ");
 	}
+    if(smin<lower){
+        smin=lower;
+    }
 	return smin;
 
 }
@@ -427,9 +436,8 @@ void MPCC::Ref_path(std::vector<double> x,std::vector<double> y, std::vector<dou
     std::vector<double> X_all, Y_all, S_all;
     total_length_=0;
     n_clothoid = 20;
-    n_pts = 10;
+    n_pts = 20;
     S_all.push_back(0);
-
 
     for (int i = 0; i < x.size()-1; i++){
         Clothoid::buildClothoid(x[i], y[i], theta[i], x[i+1], y[i+1], theta[i+1], k, dk, L);
@@ -549,6 +557,10 @@ void MPCC::reconfigureCallback(predictive_control::PredictiveControllerConfig& c
 	enable_output_ = config.enable_output;
 	n_iterations_ = config.n_iterations;
 	simulation_mode_ = config.simulation_mode;
+
+    //Search window parameters
+    window_size_ = config.window_size;
+    n_search_points_ = config.n_search_points;
 }
 
 void MPCC::executeTrajectory(const moveit_msgs::RobotTrajectory & traj){
@@ -637,15 +649,16 @@ void MPCC::publishAnaliticSplineTrajectory(void)
 {
 	spline_traj2_.header.stamp = ros::Time::now();
 	spline_traj2_.header.frame_id = controller_config_->tracking_frame_;
-	double s;
+	double s,si;
     int j=0;
 	for (int i = 0; i < 100; i++)
 	{
         s= i*(n_pts-1)*dist_spline_pts_/100.0;
-        if(s>ss[j+1]-0.05)
+        if(s>ss[j+1])
             j+=1;
-		spline_traj2_.poses[i].pose.position.x = ref_path_x.m_a[j]*s*s*s+ref_path_x.m_b[j]*s*s+ref_path_x.m_c[j]*s+ref_path_x.m_d[j]; //x
-		spline_traj2_.poses[i].pose.position.y = ref_path_y.m_a[j]*s*s*s+ref_path_y.m_b[j]*s*s+ref_path_y.m_c[j]*s+ref_path_y.m_d[j]; //y
+        si=s-ss[j];
+		spline_traj2_.poses[i].pose.position.x = ref_path_x.m_a[j]*si*si*si+ref_path_x.m_b[j]*si*si+ref_path_x.m_c[j]*si+ref_path_x.m_d[j]; //x
+		spline_traj2_.poses[i].pose.position.y = ref_path_y.m_a[j]*si*si*si+ref_path_y.m_b[j]*si*si+ref_path_y.m_c[j]*si+ref_path_y.m_d[j]; //y
 
 	}
 
