@@ -111,6 +111,7 @@ target_link_libraries(predictive_configuration
 add_library(predictive_controller
         src/mpcc_controller.cpp
         src/predictive_configuration.cpp
+        src/Clothoid.cpp
         qpoases/SRC/Bounds.cpp
         qpoases/SRC/Constraints.cpp
         qpoases/SRC/CyclingManager.cpp

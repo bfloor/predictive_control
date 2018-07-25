@@ -63,8 +63,8 @@ public:
   std::string output_cmd;
 	std::string robot_state_topic_;
 
-  // kinematic of robotics manipulator
-  unsigned int degree_of_freedom_;
+  // road parameters
+  int n_points_spline_;
 
   // use for finding kinematic chain and urdf model
   std::string robot_base_link_;

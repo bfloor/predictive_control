@@ -113,8 +113,8 @@ bool MPCC::initialize()
 		traj = j;
 
 		//initialize trajectory variable to plot prediction trajectory
-		spline_traj_.poses.resize(ACADO_N*2);
-		spline_traj2_.poses.resize(ACADO_N);
+		spline_traj_.poses.resize(100);
+		spline_traj2_.poses.resize(100);
 		pred_traj_.poses.resize(ACADO_N);
 		pred_cmd_.poses.resize(ACADO_N);
 		pred_traj_.header.frame_id = "odom";
@@ -180,9 +180,9 @@ bool MPCC::initialize()
 		acado_initializeSolver( );
 
 		//MPCC variables
-		X.resize(3);
-		Y.resize(3);
-		S.resize(3);
+		X_road.resize(3);
+		Y_road.resize(3);
+		Theta_road.resize(3);
 		traj_i =0;
 		ROS_WARN("PREDICTIVE CONTROL INTIALIZED!!");
 		return true;
@@ -294,19 +294,18 @@ void MPCC::runNode(const ros::TimerEvent &event)
         acadoVariables.x[2] = current_state_(2);
 		if(idx ==1) {
 			double smin;
-			//ROS_INFO_STREAM("Actual S: " << acadoVariables.x[ACADO_NX + 3]);
 			smin = spline_closest_point(0, 100, acadoVariables.x[ACADO_NX + 3], 0.5, 20);
 			acadoVariables.x[3] = smin;
-			//ROS_INFO_STREAM("Actual S: " << smin);
-			//acadoVariables.x[3] =acadoVariables.x[ACADO_NX + 3];
 		}
 		else
 			acadoVariables.x[3] = acadoVariables.x[3];
 
         acadoVariables.u[0] = controlled_velocity_.linear.x;
         acadoVariables.u[1] = controlled_velocity_.angular.z;
-		if(acadoVariables.x[3]>10)
-			traj_i=1;
+
+		if(acadoVariables.x[3]>ss[traj_i+1]-0.01)
+			traj_i++;
+
         for (N_iter = 0; N_iter < ACADO_N; N_iter++) {
 
             // Initialize Online Data variables
@@ -338,7 +337,7 @@ void MPCC::runNode(const ros::TimerEvent &event)
         printf("\tReal-Time Iteration:  KKT Tolerance = %.3e\n\n", acado_getKKT());
 
 		int j=1;
-        while (acado_getKKT()> 1e-2 && j<n_iterations_){
+        while (acado_getKKT()> 1e-3 && j<n_iterations_){
 
 			acado_preparationStep();
 
@@ -421,6 +420,79 @@ void MPCC::moveGoalCB()
     }
 }
 
+void MPCC::Ref_path(std::vector<double> x,std::vector<double> y, std::vector<double> theta) {
+
+    double k, dk, L;
+    std::vector<double> X(10), Y(10);
+    std::vector<double> X_all, Y_all, S_all;
+    total_length_=0;
+    n_clothoid = 20;
+    n_pts = 10;
+    S_all.push_back(0);
+
+
+    for (int i = 0; i < x.size()-1; i++){
+        Clothoid::buildClothoid(x[i], y[i], theta[i], x[i+1], y[i+1], theta[i+1], k, dk, L);
+
+        Clothoid::pointsOnClothoid(x[i], y[i], theta[i], k, dk, L, n_clothoid, X, Y);
+        if (i==0){
+            X_all.insert(X_all.end(), X.begin(), X.end());
+            Y_all.insert(Y_all.end(), Y.begin(), Y.end());
+        }
+        else{
+            X.erase(X.begin()+0);
+            Y.erase(Y.begin()+0);
+            X_all.insert(X_all.end(), X.begin(), X.end());
+            Y_all.insert(Y_all.end(), Y.begin(), Y.end());
+        }
+        total_length_ += L;
+        for (int j=1; j< n_clothoid; j++){
+            S_all.push_back(S_all[j-1+i*(n_clothoid-1)]+L/(n_clothoid-1));
+            ROS_INFO_STREAM("S_all: " << S_all[j]);
+        }
+        ROS_INFO_STREAM("X_all: " << X_all[i]);
+        ROS_INFO_STREAM("Y_all: " << Y_all[i]);
+    }
+
+    ref_path_x.set_points(S_all, X_all);
+    ref_path_y.set_points(S_all, Y_all);
+
+    dist_spline_pts_ = total_length_ / n_pts;
+    ROS_INFO_STREAM("dist_spline_pts_: " << dist_spline_pts_);
+    ss.resize(n_pts);
+    xx.resize(n_pts);
+    yy.resize(n_pts);
+
+    for (int i=0; i<n_pts; i++){
+        ss[i] = dist_spline_pts_ *i;
+        xx[i] = ref_path_x(ss[i]);
+        yy[i] = ref_path_y(ss[i]);
+        ROS_INFO_STREAM("ss: " << ss[i]);
+        ROS_INFO_STREAM("xx: " << xx[i]);
+        ROS_INFO_STREAM("yy: " << yy[i]);
+    }
+    ref_path_x.set_points(ss,xx);
+    ref_path_y.set_points(ss,yy);
+}
+
+void MPCC::ConstructRefPath(){
+
+    X_road[0] = 0;
+    X_road[1] = 10;
+    X_road[2] = 10;
+
+    Y_road[0] = 0;
+    Y_road[1] = 0;
+    Y_road[2] = 10;
+
+    Theta_road[0] = 0;
+    Theta_road[1] = M_PI/2.0;
+    Theta_road[2] = M_PI/2.0;
+
+    Ref_path(X_road, Y_road, Theta_road);
+
+}
+
 void MPCC::moveitGoalCB()
 {
     ROS_INFO_STREAM("Got new MoveIt goal!!!");
@@ -448,21 +520,11 @@ void MPCC::moveitGoalCB()
 		Y[2] = traj.multi_dof_joint_trajectory.points[2].transforms[0].translation.y;
 		Y[3] = traj.multi_dof_joint_trajectory.points[3].transforms[0].translation.y;
 */
+        traj_i =0;
+        ConstructRefPath();
 
-		X[0] = 0;
-		X[1] = 10;
-		X[2] = 10;
-
-		Y[0] = 0;
-		Y[1] = 0;
-		Y[2] = 10;
-
-		S[0] = 0;
-		S[1] = 10;
-		S[2] = 20;
-
-		ref_path_x.set_points(S, X);
-		ref_path_y.set_points(S, Y);
+		//ref_path_x.set_points(S, X);
+		//ref_path_y.set_points(S, Y);
 
 		publishSplineTrajectory();
     }
@@ -527,25 +589,7 @@ void MPCC::StateCallBack(const geometry_msgs::Pose::ConstPtr& msg)
 
 void MPCC::ObstacleCallBack(const obstacle_feed::Obstacles& obstacles)
 {
-//    ROS_INFO("OBSTACLECB");
 
-//    obstacle_feed::Obstacles total_obstacles;
-//    total_obstacles.Obstacles.resize(controller_config_->n_obstacles_);
-//    total_obstacles = obstacles;
-//
-//    if (obstacles.Obstacles.size() < controller_config_->n_obstacles_)
-//    {
-//        for (int obst_it = obstacles.Obstacles.size(); obst_it < controller_config_->n_obstacles_; obst_it++)
-//        {
-//            total_obstacles.Obstacles[obst_it].pose.position.x = 1000;
-//            total_obstacles.Obstacles[obst_it].pose.position.y = 1000;
-//            total_obstacles.Obstacles[obst_it].pose.orientation.z = 0;
-//            total_obstacles.Obstacles[obst_it].major_semiaxis = 0.001;
-//            total_obstacles.Obstacles[obst_it].minor_semiaxis = 0.001;
-//        }
-//    }
-//
-//    obstacles_ = total_obstacles;
     obstacles_ = obstacles;
 }
 
@@ -567,19 +611,13 @@ void MPCC::publishSplineTrajectory(void)
 {
 	spline_traj_.header.stamp = ros::Time::now();
 	spline_traj_.header.frame_id = controller_config_->tracking_frame_;
-	for (int i = 0; i < ACADO_N; i++)
+	for (int i = 0; i < 100; i++) // 100 points
 	{
-		spline_traj_.poses[i].pose.position.x = ref_path_x(1.0*i*S[1]/ACADO_N); //x
-		spline_traj_.poses[i].pose.position.y = ref_path_y(1.0*i*S[1]/ACADO_N); //y
+		spline_traj_.poses[i].pose.position.x = ref_path_x(i*(n_pts-1)*dist_spline_pts_/100.0); //x
+		spline_traj_.poses[i].pose.position.y = ref_path_y(i*(n_pts-1)*dist_spline_pts_/100.0); //y
 
 	}
 
-	for (int i = ACADO_N; i < 2*ACADO_N; i++)
-	{
-		spline_traj_.poses[i].pose.position.x = ref_path_x(1.0*(i-ACADO_N)*S[1]/ACADO_N+10); //x
-		spline_traj_.poses[i].pose.position.y = ref_path_y(1.0*(i-ACADO_N)*S[1]/ACADO_N+10); //y
-
-	}
 	ROS_INFO_STREAM("REF_PATH_X size:  " << ref_path_x.m_a.size());
 	for(int i =0; i< ref_path_x.m_a.size();i++){
 		ROS_INFO_STREAM("REF_PATH_Xa:  " << i << "  " << ref_path_x.m_a[i]);
@@ -600,11 +638,14 @@ void MPCC::publishAnaliticSplineTrajectory(void)
 	spline_traj2_.header.stamp = ros::Time::now();
 	spline_traj2_.header.frame_id = controller_config_->tracking_frame_;
 	double s;
-	for (int i = 0; i < ACADO_N; i++)
+    int j=0;
+	for (int i = 0; i < 100; i++)
 	{
-		s= 1.0*i*S[1]/ACADO_N;
-		spline_traj2_.poses[i].pose.position.x = ref_path_x.m_a[0]*s*s*s+ref_path_x.m_b[0]*s*s+ref_path_x.m_c[0]*s+ref_path_x.m_d[0]; //x
-		spline_traj2_.poses[i].pose.position.y = ref_path_y.m_a[0]*s*s*s+ref_path_y.m_b[0]*s*s+ref_path_y.m_c[0]*s+ref_path_y.m_d[0]; //y
+        s= i*(n_pts-1)*dist_spline_pts_/100.0;
+        if(s>ss[j+1]-0.05)
+            j+=1;
+		spline_traj2_.poses[i].pose.position.x = ref_path_x.m_a[j]*s*s*s+ref_path_x.m_b[j]*s*s+ref_path_x.m_c[j]*s+ref_path_x.m_d[j]; //x
+		spline_traj2_.poses[i].pose.position.y = ref_path_y.m_a[j]*s*s*s+ref_path_y.m_b[j]*s*s+ref_path_y.m_c[j]*s+ref_path_y.m_d[j]; //y
 
 	}
 

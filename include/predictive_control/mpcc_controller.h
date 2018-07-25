@@ -80,6 +80,7 @@
 #include <sensor_msgs/JointState.h>
 //splines
 #include <tkspline/spline.h>
+#include <predictive_control/Clothoid.h>
 
 class MPCC
 {
@@ -206,7 +207,11 @@ public:
 	tk::spline ref_path_x, ref_path_y;
 
 	//MPCC Implementation
-	std::vector<double> X, Y, S;
+	std::vector<double> X_road, Y_road, Theta_road;
+    double dist_spline_pts_;
+    double total_length_;
+    std::vector<double> ss,xx,yy;
+    int n_clothoid,n_pts;
 
 private:
 
@@ -343,6 +348,10 @@ private:
 	void broadcastPathPose();
 
 	double spline_closest_point(double s_min, double s_max, double s_guess, double window, int n_tries);
+
+    inline void Ref_path(std::vector<double> x, std::vector<double> y, std::vector<double> theta);
+
+    void ConstructRefPath();
 
     /**
      * @brief clearDataMember: clear vectors means free allocated memory

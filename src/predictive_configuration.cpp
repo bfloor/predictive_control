@@ -39,12 +39,6 @@ bool predictive_configuration::initialize() //const std::string& node_handle_nam
 		return false;
 	}
 
-  if (!nh.getParam ("self_collision/collision_check_obstacles", collision_check_obstacles_) )
-  {
-    ROS_WARN(" Parameter 'self_collision/collision_check_obstacles' not set on %s node please look at ../self_collision.yaml" , ros::this_node::getName().c_str());
-    collision_check_obstacles_.resize(degree_of_freedom_, std::string(""));
-  }
-
   // read and set constraints
   // read and set velocity constrints
   if (!nh_config.getParam ("constraints/velocity_constraints/min", vel_min_limit_) )
@@ -88,34 +82,6 @@ bool predictive_configuration::initialize() //const std::string& node_handle_nam
     }
   }
 
-  // read and set lsq control weight factors
-  if (!nh_config.getParam ("acado_config/weight_factors/lsq_control_weight_factors", lsq_control_weight_factors_) )
-  {
-    ROS_WARN(" Parameter 'acado_config/weight_factors/lsq_control_weight_factors' not set on %s node " ,
-             ros::this_node::getName().c_str());
-    // same as degree of freedom
-    lsq_control_weight_factors_.resize(degree_of_freedom_, 1.0);
-
-    for (int i = 0u; i < lsq_control_weight_factors_.size(); ++i)
-    {
-      ROS_INFO("Default lsq control weight factors value %f", lsq_control_weight_factors_.at(i));
-    }
-  }
-
-  // read and set lsq state terminal weight factors
-  if (!nh_config.getParam ("acado_config/weight_factors/lsq_state_terminal_weight_factors", lsq_state_terminal_weight_factors_) )
-  {
-    ROS_WARN(" Parameter 'acado_config/weight_factors/lsq_state_terminal_weight_factors' not set on %s node " ,
-             ros::this_node::getName().c_str());
-    // 3 position and 3 orientation(rpy) tolerance
-    lsq_state_terminal_weight_factors_.resize(6, 5.0);
-
-    for (int i = 0u; i < lsq_state_terminal_weight_factors_.size(); ++i)
-    {
-      ROS_INFO("Default lsq state terminal weight factors value %f", lsq_state_terminal_weight_factors_.at(i));
-    }
-  }
-
   ROS_WARN("Set optimal control problem dimensions");
   if (!nh.getParam("state_dim", state_dim_) )
   {
@@ -128,6 +94,36 @@ bool predictive_configuration::initialize() //const std::string& node_handle_nam
     ROS_WARN(" Parameter 'control_dim' not set on %s node " , ros::this_node::getName().c_str());
     return false;
   }
+
+    // read and set lsq state terminal weight factors
+  if (!nh_config.getParam ("acado_config/weight_factors/lsq_state_terminal_weight_factors", lsq_state_terminal_weight_factors_) )
+  {
+    ROS_WARN(" Parameter 'acado_config/weight_factors/lsq_state_terminal_weight_factors' not set on %s node " ,
+             ros::this_node::getName().c_str());
+    // 3 position and 3 orientation(rpy) tolerance
+    lsq_state_terminal_weight_factors_.resize(state_dim_, 1);
+
+    for (int i = 0u; i < lsq_state_terminal_weight_factors_.size(); ++i)
+    {
+      ROS_INFO("Default lsq state terminal weight factors value %f", lsq_state_terminal_weight_factors_.at(i));
+    }
+  }
+
+  // read and set lsq control weight factors
+  if (!nh_config.getParam ("acado_config/weight_factors/lsq_control_weight_factors", lsq_control_weight_factors_) )
+  {
+    ROS_WARN(" Parameter 'acado_config/weight_factors/lsq_control_weight_factors' not set on %s node " ,
+             ros::this_node::getName().c_str());
+    // same as degree of freedom
+    lsq_control_weight_factors_.resize(control_dim_, 1.0);
+
+    for (int i = 0u; i < lsq_control_weight_factors_.size(); ++i)
+    {
+      ROS_INFO("Default lsq control weight factors value %f", lsq_control_weight_factors_.at(i));
+    }
+  }
+
+
 
   if (!nh.getParam ("output_cmd", output_cmd) )
   {
@@ -168,6 +164,12 @@ bool predictive_configuration::initialize() //const std::string& node_handle_nam
   if (!nh.getParam ("obstacles/ego_w", ego_w_) )
   {
     ROS_WARN(" Parameter 'ego_w' not set on %s node " , ros::this_node::getName().c_str());
+    return false;
+  }
+
+  if (!nh.getParam ("n_points_spline", n_points_spline_) )
+  {
+    ROS_WARN(" Parameter 'n_points_spline_' not set on %s node " , ros::this_node::getName().c_str());
     return false;
   }
 
@@ -218,7 +220,6 @@ bool predictive_configuration::updateConfiguration(const predictive_configuratio
 
   plotting_result_ = new_config.plotting_result_;
 
-  degree_of_freedom_ = new_config.degree_of_freedom_;
   robot_base_link_ = new_config.robot_base_link_;
 
   tracking_frame_ = new_config.tracking_frame_;
@@ -270,7 +271,6 @@ void predictive_configuration::print_configuration_parameter()
   ROS_INFO_STREAM("Set velocity constrints: " << std::boolalpha << set_velocity_constraints_);
 
   ROS_INFO_STREAM("Plotting results: " << std::boolalpha << plotting_result_);
-  ROS_INFO_STREAM("Degree_of_freedom: " << degree_of_freedom_);
   ROS_INFO_STREAM("robot_base_link: " << robot_base_link_);
 
   ROS_INFO_STREAM("Clock_frequency: " << clock_frequency_);

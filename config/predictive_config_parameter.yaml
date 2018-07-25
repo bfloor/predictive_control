@@ -10,6 +10,9 @@ plotting_result: true
 # Clock frequency //hz
 clock_frequency: 20
 
+#road parameters
+n_points_spline: 3
+
 #Optimal control problem dimensions
 state_dim: 3
 control_dim: 2
