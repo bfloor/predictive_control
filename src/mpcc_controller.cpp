@@ -131,11 +131,11 @@ bool MPCC::initialize()
 		acado_initializeSolver( );
 
         // initialize state and control weight factors
-        cost_state_weight_factors_ = transformStdVectorToEigenVector(controller_config_->lsq_state_weight_factors_);
-        cost_control_weight_factors_ = transformStdVectorToEigenVector(controller_config_->lsq_control_weight_factors_);
+        cost_contour_weight_factors_ = transformStdVectorToEigenVector(controller_config_->contour_weight_factors_);
+        cost_control_weight_factors_ = transformStdVectorToEigenVector(controller_config_->control_weight_factors_);
         slack_weight_ = controller_config_->slack_weight_;
         repulsive_weight_ = controller_config_->repulsive_weight_;
-        cost_state_terminal_weight_factors_ = transformStdVectorToEigenVector(controller_config_->lsq_state_terminal_weight_factors_);
+        reference_velocity_ = controller_config_->reference_velocity_;
 
         ros::NodeHandle nh_predictive("predictive_controller");
 
@@ -322,12 +322,28 @@ void MPCC::runNode(const ros::TimerEvent &event)
 			acadoVariables.od[(ACADO_NOD * N_iter) + 5] = ref_path_y.m_b[traj_i];
 			acadoVariables.od[(ACADO_NOD * N_iter) + 6] = ref_path_y.m_c[traj_i];        // spline coefficients
 			acadoVariables.od[(ACADO_NOD * N_iter) + 7] = ref_path_y.m_d[traj_i];
-			acadoVariables.od[(ACADO_NOD * N_iter) + 8 ] = cost_state_weight_factors_(0);       // weight factor on x
-			acadoVariables.od[(ACADO_NOD * N_iter) + 9 ] = cost_state_weight_factors_(1);       // weight factor on y
+			acadoVariables.od[(ACADO_NOD * N_iter) + 8 ] = cost_contour_weight_factors_(0);       // weight factor on contour error
+			acadoVariables.od[(ACADO_NOD * N_iter) + 9 ] = cost_contour_weight_factors_(1);       // weight factor on lag error
 			acadoVariables.od[(ACADO_NOD * N_iter) + 10 ] = cost_control_weight_factors_(0);       // weight factor on theta
 			acadoVariables.od[(ACADO_NOD * N_iter) + 11 ] = cost_control_weight_factors_(1);     // weight factor on v
-			acadoVariables.od[(ACADO_NOD * N_iter) + 12 ] = ss[traj_i];     // weight factor on w
-        }
+			acadoVariables.od[(ACADO_NOD * N_iter) + 12 ] = ss[traj_i];
+            acadoVariables.od[(ACADO_NOD * N_iter) + 13 ] = reference_velocity_;
+
+            acadoVariables.od[(ACADO_NOD * N_iter) + 14] = slack_weight_;        // weight on the slack variable
+            acadoVariables.od[(ACADO_NOD * N_iter) + 15] = repulsive_weight_;    // weight on the repulsive cost
+
+            acadoVariables.od[(ACADO_NOD * N_iter) + 18] = obstacles.Obstacles[0].pose.position.x;      // x position of obstacle 1
+            acadoVariables.od[(ACADO_NOD * N_iter) + 19] = obstacles.Obstacles[0].pose.position.y;      // y position of obstacle 1
+            acadoVariables.od[(ACADO_NOD * N_iter) + 20] = obstacles.Obstacles[0].pose.orientation.z;   // heading of obstacle 1
+            acadoVariables.od[(ACADO_NOD * N_iter) + 21] = obstacles.Obstacles[0].major_semiaxis;       // major semiaxis of obstacle 1
+            acadoVariables.od[(ACADO_NOD * N_iter) + 22] = obstacles.Obstacles[0].minor_semiaxis;       // minor semiaxis of obstacle 1
+
+            acadoVariables.od[(ACADO_NOD * N_iter) + 23] = obstacles.Obstacles[1].pose.position.x;      // x position of obstacle 2
+            acadoVariables.od[(ACADO_NOD * N_iter) + 24] = obstacles.Obstacles[1].pose.position.y;      // y position of obstacle 2
+            acadoVariables.od[(ACADO_NOD * N_iter) + 25] = obstacles.Obstacles[1].pose.orientation.z;   // heading of obstacle 2
+            acadoVariables.od[(ACADO_NOD * N_iter) + 26] = obstacles.Obstacles[1].major_semiaxis;       // major semiaxis of obstacle 2
+            acadoVariables.od[(ACADO_NOD * N_iter) + 27] = obstacles.Obstacles[1].minor_semiaxis;       // minor semiaxis of obstacle 2
+    }
 
         acadoVariables.x0[ 0 ] = current_state_(0);
         acadoVariables.x0[ 1 ] = current_state_(1);
@@ -389,23 +405,33 @@ double MPCC::spline_closest_point(double s_min, double s_max, double s_guess, do
 	double upper = std::min(s_max, s_guess + window);
 	double s_i=lower,spline_pos_x_i,spline_pos_y_i;
 	double dist_i,min_dist,smin;
+
 	spline_pos_x_i = ref_path_x(s_i);
 	spline_pos_y_i = ref_path_y(s_i);
+
 	min_dist = std::sqrt((spline_pos_x_i-current_state_(0))*(spline_pos_x_i-current_state_(0))+(spline_pos_y_i-current_state_(1))*(spline_pos_y_i-current_state_(1)));
+
 	for(int i=0;i<n_tries;i++){
 		s_i = lower+(upper-lower)/n_tries*i;
 		spline_pos_x_i = ref_path_x(s_i);
 		spline_pos_y_i = ref_path_y(s_i);
 		dist_i = std::sqrt((spline_pos_x_i-current_state_(0))*(spline_pos_x_i-current_state_(0))+(spline_pos_y_i-current_state_(1))*(spline_pos_y_i-current_state_(1)));
+
 		if(dist_i<min_dist){
-			min_dist=dist_i;
-			smin=s_i;
+			min_dist = dist_i;
+			smin = s_i;
 		}
-		//ROS_INFO_STREAM("s_i: " << s_i << " " << "spline_pos_x_i: " << spline_pos_x_i << " " << "spline_pos_y_i: " << spline_pos_y_i << " " << "dist_i: " << dist_i << " ");
+
+		//		ROS_INFO_STREAM("s_i: " << s_i << " " << "spline_pos_x_i: " << spline_pos_x_i << " " << "spline_pos_y_i: " << spline_pos_y_i << " " << "dist_i: " << dist_i << " ");
+
+        // QUAINT ERROR IN INDIGO. IF NOT PAUSED, WEIRD SOLUTIONS ARE RETURNED
+//	    ros::Duration(0.000000001).sleep();
+        ros::Duration(1E-20).sleep();
 	}
-    if(smin<lower){
+    if(smin < lower){
         smin=lower;
     }
+
 	return smin;
 
 }
@@ -528,7 +554,16 @@ void MPCC::moveitGoalCB()
 		Y[2] = traj.multi_dof_joint_trajectory.points[2].transforms[0].translation.y;
 		Y[3] = traj.multi_dof_joint_trajectory.points[3].transforms[0].translation.y;
 */
-        traj_i =0;
+
+        int N_iter;
+		for (N_iter = 0; N_iter < ACADO_N; N_iter++) {
+
+            // Initialize Constant Online Data variables
+            acadoVariables.od[(ACADO_NOD * N_iter) + 16] = r_discs_;                                // radius of car discs
+            acadoVariables.od[(ACADO_NOD * N_iter) + 17] = 0; //x_discs_[1];                        // position of the car discs
+        }
+
+        traj_i = 0;
         ConstructRefPath();
 
 		//ref_path_x.set_points(S, X);
@@ -542,17 +577,15 @@ void MPCC::moveitGoalCB()
 void MPCC::reconfigureCallback(predictive_control::PredictiveControllerConfig& config, uint32_t level){
 
     ROS_INFO("reconfigure callback!");
-    cost_state_weight_factors_(0) = config.Kx;
-    cost_state_weight_factors_(1) = config.Ky;
-    cost_state_weight_factors_(2) = config.Ktheta;
+    cost_contour_weight_factors_(0) = config.Wcontour;
+    cost_contour_weight_factors_(1) = config.Wlag;
     cost_control_weight_factors_(0) = config.Kv;
     cost_control_weight_factors_(1) = config.Kw;
 
-    cost_state_terminal_weight_factors_(0) = config.Px;
-    cost_state_terminal_weight_factors_(1) = config.Py;
-    cost_state_terminal_weight_factors_(2) = config.Ptheta;
     slack_weight_= config.Ws;
     repulsive_weight_ = config.WR;
+
+    reference_velocity_ = config.vRef;
 
 	enable_output_ = config.enable_output;
 	n_iterations_ = config.n_iterations;
@@ -601,7 +634,6 @@ void MPCC::StateCallBack(const geometry_msgs::Pose::ConstPtr& msg)
 
 void MPCC::ObstacleCallBack(const obstacle_feed::Obstacles& obstacles)
 {
-
     obstacles_ = obstacles;
 }
 

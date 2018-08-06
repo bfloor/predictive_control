@@ -253,12 +253,12 @@ private:
     Eigen::VectorXd min_velocity_limit_;
     Eigen::VectorXd max_velocity_limit_;
 
-    Eigen::VectorXd cost_state_weight_factors_;
-    Eigen::VectorXd cost_state_terminal_weight_factors_;
+    Eigen::VectorXd cost_contour_weight_factors_;
     Eigen::VectorXd cost_control_weight_factors_;
 
     double slack_weight_;
     double repulsive_weight_;
+    double reference_velocity_;
 
 	//MoveIt TRAJECTORY VARIABLE
 	moveit_msgs::RobotTrajectory traj;
