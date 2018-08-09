@@ -28,7 +28,7 @@ tracking_frame: odom
 
 # Weight on the slack variable for collision collision
 slack_weight: 10000
-repulsive_weight: 5
+repulsive_weight: 0.1
 reference_velocity: 0.5
 
 # Parameters for collision constraints
