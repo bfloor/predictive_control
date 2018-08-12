@@ -189,7 +189,7 @@ public:
     ros::Publisher cartesian_error_pub_;
 
     // publish trajectory
-    ros::Publisher traj_pub_, tr_path_pub_, pred_traj_pub_, pred_cmd_pub_,cost_pub_,robot_collision_space_pub_, spline_traj_pub_,spline_traj_pub2_;
+    ros::Publisher traj_pub_, tr_path_pub_, pred_traj_pub_, pred_cmd_pub_,cost_pub_,robot_collision_space_pub_, spline_traj_pub_,spline_traj_pub2_, contour_error_pub_;
 	//Predicted trajectory
 	nav_msgs::Path pred_traj_;
 	nav_msgs::Path pred_cmd_;
@@ -202,6 +202,8 @@ public:
 
 	tf2_ros::TransformBroadcaster state_pub_, path_pose_pub_;
 	std_msgs::Float64 cost_;
+    double contour_error_;
+    double lag_error_;
 
 	//Spline trajectory generation
 	tk::spline ref_path_x, ref_path_y;
@@ -343,6 +345,8 @@ private:
 	void publishPredictedCollisionSpace(void);
 
 	void publishCost(void);
+
+    void publishContourError(void);
 
     void publishPathFromTrajectory(const moveit_msgs::RobotTrajectory& traj);
 

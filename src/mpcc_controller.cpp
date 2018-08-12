@@ -93,6 +93,7 @@ bool MPCC::initialize()
 		pred_cmd_pub_ = nh.advertise<nav_msgs::Path>("predicted_cmd",1);
         tr_path_pub_ = nh.advertise<nav_msgs::Path>("horizon",1);
 		cost_pub_ = nh.advertise<std_msgs::Float64>("cost",1);
+        contour_error_pub_ = nh.advertise<std_msgs::Float64MultiArray>("contour_error",1);
         controlled_velocity_pub_ = nh.advertise<geometry_msgs::Twist>(controller_config_->output_cmd,1);
 		joint_state_pub_ = nh.advertise<sensor_msgs::JointState>("/joint_states",1);
 		robot_collision_space_pub_ = nh.advertise<visualization_msgs::MarkerArray>("/robot_collision_space", 100);
@@ -312,6 +313,7 @@ void MPCC::runNode(const ros::TimerEvent &event)
         else
             acadoVariables.x[3] = acadoVariables.x[3];
 
+
         for (N_iter = 0; N_iter < ACADO_N; N_iter++) {
 
             // Initialize Online Data variables
@@ -357,7 +359,7 @@ void MPCC::runNode(const ros::TimerEvent &event)
 
         acado_feedbackStep();
 
-		//printf("\tReal-Time Iteration:  Path distance = %.3e\n\n", acadoVariables.x[ACADO_NX+3]);
+        //printf("\tReal-Time Iteration:  Path distance = %.3e\n\n", acadoVariables.x[ACADO_NX+3]);
         //printf("\tReal-Time Iteration:  KKT Tolerance = %.3e\n\n", acado_getKKT());
 
 		int j=1;
@@ -379,6 +381,7 @@ void MPCC::runNode(const ros::TimerEvent &event)
 		publishPredictedOutput();
 		publishAnaliticSplineTrajectory();
 		broadcastPathPose();
+        publishContourError();
 		cost_.data = acado_getObjective();
 		publishCost();
 		real_t te = acado_toc(&t);
@@ -775,4 +778,32 @@ void MPCC::publishPredictedCollisionSpace(void)
 void MPCC::publishCost(void){
 
 	cost_pub_.publish(cost_);
+}
+
+void MPCC::publishContourError(void){
+
+    // Compute contour and lag error to publish
+    double x_path, y_path, dx_path, dy_path, abs_grad, dx_path_norm, dy_path_norm;
+
+    x_path = (ref_path_x.m_a[traj_i]*(acadoVariables.x[3]-ss[traj_i])*(acadoVariables.x[3]-ss[traj_i])*(acadoVariables.x[3]-ss[traj_i]) + ref_path_x.m_b[traj_i]*(acadoVariables.x[3]-ss[traj_i])*(acadoVariables.x[3]-ss[traj_i]) + ref_path_x.m_c[traj_i]*(acadoVariables.x[3]-ss[traj_i]) + ref_path_x.m_d[traj_i]);
+    y_path = (ref_path_y.m_a[traj_i]*(acadoVariables.x[3]-ss[traj_i])*(acadoVariables.x[3]-ss[traj_i])*(acadoVariables.x[3]-ss[traj_i]) + ref_path_y.m_b[traj_i]*(acadoVariables.x[3]-ss[traj_i])*(acadoVariables.x[3]-ss[traj_i]) + ref_path_y.m_c[traj_i]*(acadoVariables.x[3]-ss[traj_i]) + ref_path_y.m_d[traj_i]);
+    dx_path = (3*ref_path_x.m_a[traj_i]*(acadoVariables.x[3]-ss[traj_i])*(acadoVariables.x[3]-ss[traj_i]) + 2*ref_path_x.m_b[traj_i]*(acadoVariables.x[3]-ss[traj_i]) + ref_path_x.m_c[traj_i]);
+    dy_path = (3*ref_path_y.m_a[traj_i]*(acadoVariables.x[3]-ss[traj_i])*(acadoVariables.x[3]-ss[traj_i]) + 2*ref_path_y.m_b[traj_i]*(acadoVariables.x[3]-ss[traj_i]) + ref_path_y.m_c[traj_i]);
+
+    abs_grad = sqrt(pow(dx_path,2) + pow(dy_path,2));
+
+    dx_path_norm = dx_path/abs_grad;
+    dy_path_norm = dy_path/abs_grad;
+
+    contour_error_ =  dy_path_norm * (acadoVariables.x[0] - x_path) - dx_path_norm * (acadoVariables.x[1] - y_path);
+    lag_error_ = -dx_path_norm * (acadoVariables.x[0] - x_path) - dy_path_norm * (acadoVariables.x[1] - y_path);
+
+    std_msgs::Float64MultiArray errors;
+
+    errors.data.resize(2);
+
+    errors.data[0] = contour_error_;
+    errors.data[1] = lag_error_;
+
+    contour_error_pub_.publish(errors);
 }
