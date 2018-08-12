@@ -109,6 +109,7 @@ bool MPCC::initialize()
 		idx = 1;
 		idy = 1;
 		epsilon_ = 0.01;
+		goal_reached_ = false;
 
 		moveit_msgs::RobotTrajectory j;
 		traj = j;
@@ -298,11 +299,21 @@ void MPCC::runNode(const ros::TimerEvent &event)
         acadoVariables.u[1] = controlled_velocity_.angular.z;
         acadoVariables.u[2] = 0.0000001;           //slack variable
 
-		if(acadoVariables.x[3]>ss[traj_i+1]) {
-            traj_i++;
+		if(acadoVariables.x[3] > ss[traj_i+1]) {
+
+		    if (traj_i + 1 == ss.size()){
+		        goal_reached_ = true;
+                ROS_ERROR_STREAM("GOAL REACHED");
+            }
+		    else{
+			    traj_i++;
             //acadoVariables.x[3]-=ss[traj_i];
             ROS_ERROR_STREAM("SWITCH SPLINE " << acadoVariables.x[3]);
+		    }
         }
+
+        ROS_INFO_STREAM("traj_i: " << traj_i);
+        ROS_INFO_STREAM("ss_length: " << ss.size());
 
         if(idx ==1) {
             double smin;
@@ -330,7 +341,13 @@ void MPCC::runNode(const ros::TimerEvent &event)
 			acadoVariables.od[(ACADO_NOD * N_iter) + 10 ] = cost_control_weight_factors_(0);       // weight factor on theta
 			acadoVariables.od[(ACADO_NOD * N_iter) + 11 ] = cost_control_weight_factors_(1);     // weight factor on v
 			acadoVariables.od[(ACADO_NOD * N_iter) + 12 ] = ss[traj_i];
-            acadoVariables.od[(ACADO_NOD * N_iter) + 13 ] = reference_velocity_;
+
+			if (goal_reached_){
+                acadoVariables.od[(ACADO_NOD * N_iter) + 13 ] = 0;
+			}
+			else {
+				acadoVariables.od[(ACADO_NOD * N_iter) + 13 ] = reference_velocity_;
+			}
 
             acadoVariables.od[(ACADO_NOD * N_iter) + 14] = slack_weight_;        // weight on the slack variable
             acadoVariables.od[(ACADO_NOD * N_iter) + 15] = repulsive_weight_;    // weight on the repulsive cost
@@ -510,14 +527,23 @@ void MPCC::Ref_path(std::vector<double> x,std::vector<double> y, std::vector<dou
         ROS_INFO_STREAM("xx: " << xx[i]);
         ROS_INFO_STREAM("yy: " << yy[i]);
     }
+
     ref_path_x.set_points(ss,xx);
     ref_path_y.set_points(ss,yy);
 }
 
 void MPCC::ConstructRefPath(){
 
+//    X_road[0] = 0;
+//    X_road[1] = 10;
+//    X_road[2] = 10;
+//
+//    Y_road[0] = 0;
+//    Y_road[1] = 0;
+//    Y_road[2] = 10;
+
     X_road[0] = 0;
-    X_road[1] = 10;
+    X_road[1] = -10;
     X_road[2] = 10;
 
     Y_road[0] = 0;
@@ -569,6 +595,7 @@ void MPCC::moveitGoalCB()
         }
 
         traj_i = 0;
+		goal_reached_ = false;
         ConstructRefPath();
 
 		//ref_path_x.set_points(S, X);

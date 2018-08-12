@@ -217,6 +217,7 @@ public:
     //Search window parameters
     double window_size_;
     int n_search_points_;
+    bool goal_reached_;
 
 private:
 
