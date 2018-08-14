@@ -91,13 +91,16 @@ bool MPCC::initialize()
         //Publishers
         traj_pub_ = nh.advertise<visualization_msgs::MarkerArray>("pd_trajectory",1);
 		pred_cmd_pub_ = nh.advertise<nav_msgs::Path>("predicted_cmd",1);
-        tr_path_pub_ = nh.advertise<nav_msgs::Path>("horizon",1);
 		cost_pub_ = nh.advertise<std_msgs::Float64>("cost",1);
         contour_error_pub_ = nh.advertise<std_msgs::Float64MultiArray>("contour_error",1);
         controlled_velocity_pub_ = nh.advertise<geometry_msgs::Twist>(controller_config_->output_cmd,1);
 		joint_state_pub_ = nh.advertise<sensor_msgs::JointState>("/joint_states",1);
 		robot_collision_space_pub_ = nh.advertise<visualization_msgs::MarkerArray>("/robot_collision_space", 100);
-        ros::Duration(1).sleep();
+        pred_traj_pub_ = nh.advertise<nav_msgs::Path>("predicted_trajectory",1);
+		spline_traj_pub_ = nh.advertise<nav_msgs::Path>("spline_traj",1);
+		spline_traj_pub2_ = nh.advertise<nav_msgs::Path>("reference_traj",1);
+
+		ros::Duration(1).sleep();
 
         timer_ = nh.createTimer(ros::Duration(1/clock_frequency_), &MPCC::runNode, this);
         timer_.start();
@@ -124,10 +127,6 @@ bool MPCC::initialize()
 		{
 			pred_traj_.poses[i].header.frame_id = "odom";
 		}
-
-		pred_traj_pub_ = nh.advertise<nav_msgs::Path>("mpc_horizon",1);
-		spline_traj_pub_ = nh.advertise<nav_msgs::Path>("spline_traj",1);
-		spline_traj_pub2_ = nh.advertise<nav_msgs::Path>("spline_traj2",1);
 
 		// Initialize pregenerated mpc solver
 		acado_initializeSolver( );
