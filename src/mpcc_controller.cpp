@@ -533,21 +533,21 @@ void MPCC::Ref_path(std::vector<double> x,std::vector<double> y, std::vector<dou
 
 void MPCC::ConstructRefPath(){
 
-//    X_road[0] = 0;
-//    X_road[1] = 10;
-//    X_road[2] = 10;
-//
-//    Y_road[0] = 0;
-//    Y_road[1] = 0;
-//    Y_road[2] = 10;
-
     X_road[0] = 0;
-    X_road[1] = -10;
+    X_road[1] = 10;
     X_road[2] = 10;
 
     Y_road[0] = 0;
     Y_road[1] = 0;
     Y_road[2] = 10;
+
+//    X_road[0] = 0;
+//    X_road[1] = -10;
+//    X_road[2] = 10;
+//
+//    Y_road[0] = 0;
+//    Y_road[1] = 0;
+//    Y_road[2] = 10;
 
     Theta_road[0] = 0;
     Theta_road[1] = M_PI/2.0;
