@@ -14,8 +14,8 @@ clock_frequency: 20
 n_points_spline: 3
 
 #Optimal control problem dimensions
-state_dim: 3
-control_dim: 2
+state_dim: 13
+control_dim: 3
 
 #Inputs and output topics topic
 output_cmd: '/jackal_velocity_controller/cmd_vel'
@@ -33,7 +33,7 @@ reference_velocity: 0.5
 
 # Parameters for collision constraints
 obstacles:
-      n_obstacles: 2
+      n_obstacles: 4
       sub_ellipse_topic: ellipse_objects_feed
       n_discs: 1
       ego_l: 0.5
