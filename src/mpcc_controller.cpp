@@ -98,7 +98,8 @@ bool MPCC::initialize()
 		robot_collision_space_pub_ = nh.advertise<visualization_msgs::MarkerArray>("/robot_collision_space", 100);
         pred_traj_pub_ = nh.advertise<nav_msgs::Path>("predicted_trajectory",1);
 		spline_traj_pub_ = nh.advertise<nav_msgs::Path>("spline_traj",1);
-		spline_traj_pub2_ = nh.advertise<nav_msgs::Path>("reference_traj",1);
+		spline_traj_pub2_ = nh.advertise<nav_msgs::Path>("reference_trajectory",1);
+		feedback_pub_ = nh.advertise<predictive_control::control_feedback>("controller_feedback",1);
 
 		ros::Duration(1).sleep();
 
@@ -300,7 +301,7 @@ void MPCC::runNode(const ros::TimerEvent &event)
 
 		if(acadoVariables.x[3] > ss[traj_i+1]) {
 
-		    if (traj_i + 1 == ss.size()){
+		    if (traj_i + 2 == ss.size()){
 		        goal_reached_ = true;
                 ROS_ERROR_STREAM("GOAL REACHED");
             }
@@ -335,33 +336,46 @@ void MPCC::runNode(const ros::TimerEvent &event)
 			acadoVariables.od[(ACADO_NOD * N_iter) + 5] = ref_path_y.m_b[traj_i];
 			acadoVariables.od[(ACADO_NOD * N_iter) + 6] = ref_path_y.m_c[traj_i];        // spline coefficients
 			acadoVariables.od[(ACADO_NOD * N_iter) + 7] = ref_path_y.m_d[traj_i];
-			acadoVariables.od[(ACADO_NOD * N_iter) + 8 ] = cost_contour_weight_factors_(0);       // weight factor on contour error
-			acadoVariables.od[(ACADO_NOD * N_iter) + 9 ] = cost_contour_weight_factors_(1);       // weight factor on lag error
-			acadoVariables.od[(ACADO_NOD * N_iter) + 10 ] = cost_control_weight_factors_(0);       // weight factor on theta
-			acadoVariables.od[(ACADO_NOD * N_iter) + 11 ] = cost_control_weight_factors_(1);     // weight factor on v
-			acadoVariables.od[(ACADO_NOD * N_iter) + 12 ] = ss[traj_i];
+			
+			acadoVariables.od[(ACADO_NOD * N_iter) + 8] = ref_path_x.m_a[traj_i + 1];        // spline coefficients
+            acadoVariables.od[(ACADO_NOD * N_iter) + 9] = ref_path_x.m_b[traj_i + 1];
+            acadoVariables.od[(ACADO_NOD * N_iter) + 10] = ref_path_x.m_c[traj_i + 1];        // spline coefficients
+            acadoVariables.od[(ACADO_NOD * N_iter) + 11] = ref_path_x.m_d[traj_i + 1];
+            acadoVariables.od[(ACADO_NOD * N_iter) + 12] = ref_path_y.m_a[traj_i + 1];        // spline coefficients
+            acadoVariables.od[(ACADO_NOD * N_iter) + 13] = ref_path_y.m_b[traj_i + 1];
+            acadoVariables.od[(ACADO_NOD * N_iter) + 14] = ref_path_y.m_c[traj_i + 1];        // spline coefficients
+            acadoVariables.od[(ACADO_NOD * N_iter) + 15] = ref_path_y.m_d[traj_i + 1];
+
+			acadoVariables.od[(ACADO_NOD * N_iter) + 16] = cost_contour_weight_factors_(0);       // weight factor on contour error
+			acadoVariables.od[(ACADO_NOD * N_iter) + 17] = cost_contour_weight_factors_(1);       // weight factor on lag error
+			acadoVariables.od[(ACADO_NOD * N_iter) + 18 ] = cost_control_weight_factors_(0);       // weight factor on theta
+			acadoVariables.od[(ACADO_NOD * N_iter) + 19 ] = cost_control_weight_factors_(1);     // weight factor on v
+			acadoVariables.od[(ACADO_NOD * N_iter) + 20 ] = ss[traj_i];
+            acadoVariables.od[(ACADO_NOD * N_iter) + 21 ] = ss[traj_i + 1];
 
 			if (goal_reached_){
-                acadoVariables.od[(ACADO_NOD * N_iter) + 13 ] = 0;
+                acadoVariables.od[(ACADO_NOD * N_iter) + 22 ] = 0;
 			}
 			else {
-				acadoVariables.od[(ACADO_NOD * N_iter) + 13 ] = reference_velocity_;
+				acadoVariables.od[(ACADO_NOD * N_iter) + 22 ] = reference_velocity_;
 			}
 
-            acadoVariables.od[(ACADO_NOD * N_iter) + 14] = slack_weight_;        // weight on the slack variable
-            acadoVariables.od[(ACADO_NOD * N_iter) + 15] = repulsive_weight_;    // weight on the repulsive cost
+			acadoVariables.od[(ACADO_NOD * N_iter) + 23 ] = ss[traj_i + 1] + 0.02;
 
-            acadoVariables.od[(ACADO_NOD * N_iter) + 18] = obstacles_.Obstacles[0].pose.position.x;      // x position of obstacle 1
-            acadoVariables.od[(ACADO_NOD * N_iter) + 19] = obstacles_.Obstacles[0].pose.position.y;      // y position of obstacle 1
-            acadoVariables.od[(ACADO_NOD * N_iter) + 20] = obstacles_.Obstacles[0].pose.orientation.z;   // heading of obstacle 1
-            acadoVariables.od[(ACADO_NOD * N_iter) + 21] = obstacles_.Obstacles[0].major_semiaxis;       // major semiaxis of obstacle 1
-            acadoVariables.od[(ACADO_NOD * N_iter) + 22] = obstacles_.Obstacles[0].minor_semiaxis;       // minor semiaxis of obstacle 1
+            acadoVariables.od[(ACADO_NOD * N_iter) + 24] = slack_weight_;        // weight on the slack variable
+            acadoVariables.od[(ACADO_NOD * N_iter) + 25] = repulsive_weight_;    // weight on the repulsive cost
 
-            acadoVariables.od[(ACADO_NOD * N_iter) + 23] = obstacles_.Obstacles[1].pose.position.x;      // x position of obstacle 2
-            acadoVariables.od[(ACADO_NOD * N_iter) + 24] = obstacles_.Obstacles[1].pose.position.y;      // y position of obstacle 2
-            acadoVariables.od[(ACADO_NOD * N_iter) + 25] = obstacles_.Obstacles[1].pose.orientation.z;   // heading of obstacle 2
-            acadoVariables.od[(ACADO_NOD * N_iter) + 26] = obstacles_.Obstacles[1].major_semiaxis;       // major semiaxis of obstacle 2
-            acadoVariables.od[(ACADO_NOD * N_iter) + 27] = obstacles_.Obstacles[1].minor_semiaxis;       // minor semiaxis of obstacle 2
+            acadoVariables.od[(ACADO_NOD * N_iter) + 28] = obstacles_.Obstacles[0].pose.position.x;      // x position of obstacle 1
+            acadoVariables.od[(ACADO_NOD * N_iter) + 29] = obstacles_.Obstacles[0].pose.position.y;      // y position of obstacle 1
+            acadoVariables.od[(ACADO_NOD * N_iter) + 30] = obstacles_.Obstacles[0].pose.orientation.z;   // heading of obstacle 1
+            acadoVariables.od[(ACADO_NOD * N_iter) + 31] = obstacles_.Obstacles[0].major_semiaxis;       // major semiaxis of obstacle 1
+            acadoVariables.od[(ACADO_NOD * N_iter) + 32] = obstacles_.Obstacles[0].minor_semiaxis;       // minor semiaxis of obstacle 1
+
+            acadoVariables.od[(ACADO_NOD * N_iter) + 33] = obstacles_.Obstacles[1].pose.position.x;      // x position of obstacle 2
+            acadoVariables.od[(ACADO_NOD * N_iter) + 34] = obstacles_.Obstacles[1].pose.position.y;      // y position of obstacle 2
+            acadoVariables.od[(ACADO_NOD * N_iter) + 35] = obstacles_.Obstacles[1].pose.orientation.z;   // heading of obstacle 2
+            acadoVariables.od[(ACADO_NOD * N_iter) + 36] = obstacles_.Obstacles[1].major_semiaxis;       // major semiaxis of obstacle 2
+            acadoVariables.od[(ACADO_NOD * N_iter) + 37] = obstacles_.Obstacles[1].minor_semiaxis;       // minor semiaxis of obstacle 2
     }
 
         acadoVariables.x0[ 0 ] = current_state_(0);
@@ -369,6 +383,7 @@ void MPCC::runNode(const ros::TimerEvent &event)
         acadoVariables.x0[ 2 ] = current_state_(2);
 		acadoVariables.x0[ 3 ] = acadoVariables.x[3];
         acadoVariables.x0[ 4 ] = 0.0000001;             //dummy state
+
         ROS_INFO_STREAM("ss[traj_i]: " << ss[traj_i]);
         ROS_INFO_STREAM("acadoVariables.x[3]: " << acadoVariables.x[3]);
         acado_preparationStep();
@@ -389,6 +404,8 @@ void MPCC::runNode(const ros::TimerEvent &event)
 			j++;    //        acado_printDifferentialVariables();
         }
 
+        te_ = acado_toc(&t)
+
 		controlled_velocity_.linear.x = acadoVariables.u[0];
 		controlled_velocity_.angular.z = acadoVariables.u[1];
 
@@ -400,8 +417,8 @@ void MPCC::runNode(const ros::TimerEvent &event)
         publishContourError();
 		cost_.data = acado_getObjective();
 		publishCost();
-		real_t te = acado_toc(&t);
-		ROS_INFO_STREAM("Solve time " << te * 1e6 << " us");
+        publishFeedback(j,te_);
+		ROS_INFO_STREAM("Solve time " << te_ * 1e6 << " us");
 
     // publish zero controlled velocity
         if (!tracking_)
@@ -589,8 +606,8 @@ void MPCC::moveitGoalCB()
 		for (N_iter = 0; N_iter < ACADO_N; N_iter++) {
 
             // Initialize Constant Online Data variables
-            acadoVariables.od[(ACADO_NOD * N_iter) + 16] = r_discs_;                                // radius of car discs
-            acadoVariables.od[(ACADO_NOD * N_iter) + 17] = 0; //x_discs_[1];                        // position of the car discs
+            acadoVariables.od[(ACADO_NOD * N_iter) + 26] = r_discs_;                                // radius of car discs
+            acadoVariables.od[(ACADO_NOD * N_iter) + 27] = 0; //x_discs_[1];                        // position of the car discs
         }
 
         traj_i = 0;
@@ -752,7 +769,8 @@ void MPCC::publishAnaliticSplineTrajectory(void)
         si=s-ss[j];
 		spline_traj2_.poses[i].pose.position.x = ref_path_x.m_a[j]*si*si*si+ref_path_x.m_b[j]*si*si+ref_path_x.m_c[j]*si+ref_path_x.m_d[j]; //x
 		spline_traj2_.poses[i].pose.position.y = ref_path_y.m_a[j]*si*si*si+ref_path_y.m_b[j]*si*si+ref_path_y.m_c[j]*si+ref_path_y.m_d[j]; //y
-
+        spline_traj2_.poses[i].header.stamp = ros::Time::now();
+        spline_traj2_.poses[i].header.frame_id = controller_config_->tracking_frame_;
 	}
 
 	spline_traj_pub2_.publish(spline_traj2_);
@@ -832,4 +850,44 @@ void MPCC::publishContourError(void){
     errors.data[1] = lag_error_;
 
     contour_error_pub_.publish(errors);
+}
+
+void MPCC::publishFeedback(int& it, double& time)
+{
+
+    predictive_control::control_feedback feedback_msg;
+
+    feedback_msg.header.stamp = ros::Time::now();
+    feedback_msg.header.frame_id = controller_config_->tracking_frame_;
+
+    feedback_msg.cost = cost_.data;
+    feedback_msg.iterations = it;
+    feedback_msg.computation_time = time;
+    feedback_msg.kkt = acado_getKKT();
+
+    feedback_msg.wC = cost_contour_weight_factors_(0);       // weight factor on contour error
+    feedback_msg.wL = cost_contour_weight_factors_(1);       // weight factor on lag error
+    feedback_msg.wV = cost_control_weight_factors_(0);       // weight factor on theta
+    feedback_msg.wW = cost_control_weight_factors_(1);
+
+    // Compute contour errors
+    feedback_msg.contour_errors.data.resize(2);
+
+    feedback_msg.contour_errors.data[0] = contour_error_;
+    feedback_msg.contour_errors.data[1] = lag_error_;
+
+    feedback_msg.reference_path = spline_traj2_;
+    feedback_msg.prediction_horizon = pred_traj_;
+    feedback_msg.prediction_horizon.poses[0].pose.position.z = acadoVariables.x[3];
+    feedback_msg.computed_control = controlled_velocity_;
+
+    feedback_msg.enable_output = enable_output_;
+
+    feedback_msg.vRef = reference_velocity_;
+
+    //Search window parameters
+    feedback_msg.window = window_size_;
+    feedback_msg.search_points = n_search_points_;
+
+    feedback_pub_.publish(feedback_msg);
 }

@@ -59,6 +59,12 @@ add_action_files(
 #  FILES
 #)
 
+# Generate messages in the 'msg' folder
+add_message_files(
+  FILES
+  control_feedback.msg
+)
+
 ## Generate services in the 'srv' folder
 add_service_files(
   DIRECTORY
@@ -69,14 +75,16 @@ add_service_files(
 # Generate added messages and services with any dependencies listed here
 generate_messages(
     DEPENDENCIES
-            actionlib_msgs
-            geometry_msgs
-            sensor_msgs
-            std_msgs
-            shape_msgs
-            visualization_msgs
-            moveit_msgs
-            obstacle_feed
+    actionlib_msgs
+    geometry_msgs
+    sensor_msgs
+    std_msgs
+    nav_msgs
+    shape_msgs
+    visualization_msgs
+    moveit_msgs
+    obstacle_feed
+    predictive_control
 )
 
 catkin_package(

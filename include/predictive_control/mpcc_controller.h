@@ -48,6 +48,7 @@
 
 // predicitve includes
 #include <predictive_control/predictive_configuration.h>
+#include <predictive_control/control_feedback.h>
 
 // actions, srvs, msgs
 #include <actionlib/server/simple_action_server.h>
@@ -81,6 +82,8 @@
 //splines
 #include <tkspline/spline.h>
 #include <predictive_control/Clothoid.h>
+
+typedef double real_t;
 
 class MPCC
 {
@@ -189,7 +192,7 @@ public:
     ros::Publisher cartesian_error_pub_;
 
     // publish trajectory
-    ros::Publisher traj_pub_, tr_path_pub_, pred_traj_pub_, pred_cmd_pub_,cost_pub_,robot_collision_space_pub_, spline_traj_pub_,spline_traj_pub2_, contour_error_pub_;
+    ros::Publisher traj_pub_, tr_path_pub_, pred_traj_pub_, pred_cmd_pub_,cost_pub_,robot_collision_space_pub_, spline_traj_pub_,spline_traj_pub2_, contour_error_pub_, feedback_pub_;
 	//Predicted trajectory
 	nav_msgs::Path pred_traj_;
 	nav_msgs::Path pred_cmd_;
@@ -360,6 +363,8 @@ private:
     inline void Ref_path(std::vector<double> x, std::vector<double> y, std::vector<double> theta);
 
     void ConstructRefPath();
+
+    void publishFeedback(int& it, double& time);
 
     /**
      * @brief clearDataMember: clear vectors means free allocated memory
