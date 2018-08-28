@@ -189,13 +189,9 @@ public:
     ros::Publisher cartesian_error_pub_;
 
     // publish trajectory
-    ros::Publisher traj_pub_, tr_path_pub_, pred_traj_pub_, pred_obst1_traj_pub_, pred_obst2_traj_pub_, pred_obst3_traj_pub_, pred_obst4_traj_pub_, pred_cmd_pub_,cost_pub_,robot_collision_space_pub_, spline_traj_pub_,spline_traj_pub2_, contour_error_pub_;
+    ros::Publisher traj_pub_, tr_path_pub_, pred_traj_pub_, pred_cmd_pub_,cost_pub_,robot_collision_space_pub_, spline_traj_pub_,spline_traj_pub2_, contour_error_pub_;
 	//Predicted trajectory
 	nav_msgs::Path pred_traj_;
-    nav_msgs::Path pred_obst1_traj_;
-    nav_msgs::Path pred_obst2_traj_;
-    nav_msgs::Path pred_obst3_traj_;
-    nav_msgs::Path pred_obst4_traj_;
 	nav_msgs::Path pred_cmd_;
 	nav_msgs::Path spline_traj_,spline_traj2_;
 	int traj_i;
@@ -344,8 +340,6 @@ private:
 	void publishSplineTrajectory(void);
 
 	void publishAnaliticSplineTrajectory(void);
-
-	void publishPredictedObstTrajectory(void);
 
 	void publishPredictedOutput(void);
 
