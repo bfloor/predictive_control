@@ -386,6 +386,7 @@ void MPCC::runNode(const ros::TimerEvent &event)
 
         ROS_INFO_STREAM("ss[traj_i]: " << ss[traj_i]);
         ROS_INFO_STREAM("acadoVariables.x[3]: " << acadoVariables.x[3]);
+
         acado_preparationStep();
 
         acado_feedbackStep();
@@ -404,7 +405,7 @@ void MPCC::runNode(const ros::TimerEvent &event)
 			j++;    //        acado_printDifferentialVariables();
         }
 
-        te_ = acado_toc(&t)
+        te_ = acado_toc(&t);
 
 		controlled_velocity_.linear.x = acadoVariables.u[0];
 		controlled_velocity_.angular.z = acadoVariables.u[1];
