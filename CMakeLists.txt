@@ -141,11 +141,16 @@ target_include_directories(predictive_controller PUBLIC
         qpoases/INCLUDE
         qpoases/SRC)
 
+add_library(tkspline src/spline.cpp)
+target_link_libraries(tkspline
+        ${catkin_LIBRARIES}
+        )
+
 add_executable(predictive_control_node src/predictive_control_node.cpp)
 target_link_libraries(predictive_control_node
         predictive_controller
         ${catkin_LIBRARIES}
-        tkspline_lib)
+        tkspline)
 
 add_dependencies(predictive_control_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
