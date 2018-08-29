@@ -31,11 +31,11 @@ find_package(catkin REQUIRED COMPONENTS
 find_package(Boost REQUIRED COMPONENTS thread)
 find_package(Eigen3 REQUIRED)
 
-find_package(ACADO REQUIRED)
+#find_package(ACADO REQUIRED)
 
 add_definitions(${EIGEN_DEFINITIONS})
 
-find_package(orocos_kdl REQUIRED)
+#find_package(orocos_kdl REQUIRED)
 
 catkin_python_setup()
 
@@ -89,8 +89,8 @@ generate_messages(
 
 catkin_package(
   CATKIN_DEPENDS actionlib_msgs cob_srvs dynamic_reconfigure eigen_conversions geometry_msgs kdl_conversions kdl_parser nav_msgs roscpp sensor_msgs std_msgs tf tf_conversions urdf visualization_msgs shape_msgs moveit_core obstacle_feed
-  DEPENDS Boost ACADO
-  INCLUDE_DIRS include ${ACADO_INCLUDE_DIRS} include/${PROJECT_NAME}
+  DEPENDS Boost #ACADO
+  INCLUDE_DIRS include/${PROJECT_NAME} #include ${ACADO_INCLUDE_DIRS} 
   LIBRARIES  predictive_configuration predictive_controller
 )
 
@@ -98,21 +98,21 @@ catkin_package(
 include_directories(include
     ${catkin_INCLUDE_DIRS}
     ${EIGEN_INCLUDE_DIRS}
-    ${orocos_kdl_INCLUDE_DIRS}
-    ${ACADO_INCLUDE_DIRS}
+    #${orocos_kdl_INCLUDE_DIRS}
+    #${ACADO_INCLUDE_DIRS}
     include/${PROJECT_NAME}
     include/${PROJECT_NAME}/generated_mpc
     qpoases/include
     qpoases/src
     )
 
-FIND_LIBRARY(libacado libacado_toolkit_s.so ${ACADO_DIR}/build/lib)
+#FIND_LIBRARY(libacado libacado_toolkit_s.so ${ACADO_DIR}/build/lib)
 
 add_library(predictive_configuration src/predictive_configuration.cpp)
 add_dependencies(predictive_configuration ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 target_link_libraries(predictive_configuration
     ${catkin_LIBRARIES}
-    ${orocos_kdl_LIBRARIES}
+    #${orocos_kdl_LIBRARIES}
     ${CASADI_LIBRARIES}
     )
 
