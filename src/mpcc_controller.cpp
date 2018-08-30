@@ -183,10 +183,17 @@ bool MPCC::initialize()
 		// Initialize pregenerated mpc solver
 		acado_initializeSolver( );
 
-		//MPCC variables
-		X_road.resize(3);
-		Y_road.resize(3);
-		Theta_road.resize(3);
+		// MPCC reference path variables
+		X_road.resize(controller_config_->ref_x_.size());
+		Y_road.resize(controller_config_->ref_y_.size());
+		Theta_road.resize(controller_config_->ref_theta_.size());
+
+		// Check if all reference vectors are of the same length
+		if (!( (controller_config_->ref_x_.size() == controller_config_->ref_y_.size()) && ( controller_config_->ref_x_.size() == controller_config_->ref_theta_.size() ) && (controller_config_->ref_y_.size() == controller_config_->ref_theta_.size()) ))
+        {
+            ROS_ERROR("Reference path inputs should be of equal length");
+        }
+
 		traj_i =0;
 		ROS_WARN("PREDICTIVE CONTROL INTIALIZED!!");
 		return true;
@@ -513,8 +520,8 @@ void MPCC::Ref_path(std::vector<double> x,std::vector<double> y, std::vector<dou
     std::vector<double> X(10), Y(10);
     std::vector<double> X_all, Y_all, S_all;
     total_length_= 0;
-    n_clothoid = 5;
-    n_pts = 5;
+    n_clothoid = controller_config_->n_points_clothoid_;
+    n_pts = controller_config_->n_points_spline_;
     S_all.push_back(0);
 
     for (int i = 0; i < x.size()-1; i++){
@@ -582,17 +589,17 @@ void MPCC::ConstructRefPath(){
 //    Y_road[3] = -3;
 //    Theta_road[3] = M_PI/2;
 
-    X_road[0] = 0;
-    X_road[1] = 3;
-    X_road[2] = 6;
-
-    Y_road[0] = 0;
-    Y_road[1] = 0;
-    Y_road[2] = 0;
-
-    Theta_road[0] = 0;
-    Theta_road[1] = 0;
-    Theta_road[2] = 0;
+//    X_road[0] = 0;
+//    X_road[1] = 3;
+//    X_road[2] = 6;
+//
+//    Y_road[0] = 0;
+//    Y_road[1] = 0;
+//    Y_road[2] = 0;
+//
+//    Theta_road[0] = 0;
+//    Theta_road[1] = 0;
+//    Theta_road[2] = 0;
 
 //    X_road[0] = -2;
 //    X_road[1] = 0;
@@ -628,8 +635,14 @@ void MPCC::ConstructRefPath(){
 //    Theta_road[1] = M_PI/2.0;
 //    Theta_road[2] = M_PI/2.0;
 
-    Ref_path(X_road, Y_road, Theta_road);
+    for (int ref_point_it = 0; ref_point_it < controller_config_->ref_x_.size(); ref_point_it++)
+    {
+        X_road[ref_point_it] = controller_config_->ref_x_.at(ref_point_it);
+        Y_road[ref_point_it] = controller_config_->ref_y_.at(ref_point_it);
+        Theta_road[ref_point_it] = controller_config_->ref_theta_.at(ref_point_it);
+    }
 
+    Ref_path(X_road, Y_road, Theta_road);
 }
 
 void MPCC::moveitGoalCB()
@@ -649,16 +662,6 @@ void MPCC::moveitGoalCB()
         goal_pose_(2) = traj.multi_dof_joint_trajectory.points[traj_n - 1].transforms[0].rotation.z;
         
         acado_initializeSolver( );
-/*
-		X[0] = traj.multi_dof_joint_trajectory.points[0].transforms[0].translation.x;
-		X[1] = traj.multi_dof_joint_trajectory.points[1].transforms[0].translation.x;
-		X[2] = traj.multi_dof_joint_trajectory.points[2].transforms[0].translation.x;
-		X[3] = traj.multi_dof_joint_trajectory.points[3].transforms[0].translation.x;
-		Y[0] = traj.multi_dof_joint_trajectory.points[0].transforms[0].translation.y;
-		Y[1] = traj.multi_dof_joint_trajectory.points[1].transforms[0].translation.y;
-		Y[2] = traj.multi_dof_joint_trajectory.points[2].transforms[0].translation.y;
-		Y[3] = traj.multi_dof_joint_trajectory.points[3].transforms[0].translation.y;
-*/
 
         int N_iter;
 		for (N_iter = 0; N_iter < ACADO_N; N_iter++) {

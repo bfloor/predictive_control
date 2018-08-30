@@ -10,9 +10,6 @@ plotting_result: true
 # Clock frequency //hz
 clock_frequency: 20
 
-#road parameters
-n_points_spline: 3
-
 #Optimal control problem dimensions
 state_dim: 3
 control_dim: 2
@@ -30,6 +27,21 @@ tracking_frame: odom
 slack_weight: 10000
 repulsive_weight: 0.1
 reference_velocity: 0.5
+
+# Parameters for predefined reference path
+#global_path:
+#      x: [0, 4, 8]
+#      y: [0, 0, 0]
+#      theta: [0, 0, 0]
+#      n_points_clothoid: 20
+#      n_points_spline: 20
+
+global_path:
+      x: [-2, 0, 1, -1, 0, 1.5]
+      y: [0, 2, 1, 2, 0, 0]
+      theta: [0, 1.5708, 3.1416, 3.1416, 0, 0]
+      n_points_clothoid: 10
+      n_points_spline: 10
 
 # Parameters for collision constraints
 obstacles:
@@ -60,3 +72,4 @@ acado_config:
            control_weight_factors:
                 # same as degree of freedom
                 [1.0, 1.0]
+
