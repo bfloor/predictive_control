@@ -222,6 +222,7 @@ public:
     double window_size_;
     int n_search_points_;
     bool goal_reached_;
+    bool last_poly_;
 
 private:
 
