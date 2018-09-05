@@ -54,6 +54,7 @@ public:
   /** data member of class **/
   // DEBUG
   bool activate_debug_output_;
+  bool publish_feedback_;
   bool plotting_result_;
   bool activate_controller_node_output_;
   bool initialize_success_;

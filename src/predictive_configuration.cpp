@@ -186,6 +186,7 @@ bool predictive_configuration::initialize() //const std::string& node_handle_nam
   nh.param("reference_velocity", reference_velocity_, double(0.5)); // 0.5 by default
   nh.param("repulsive_weight", repulsive_weight_, double(0.1)); // 0.1 by default
   nh.param("activate_debug_output", activate_debug_output_, bool(false));  // debug
+  nh.param("publish_feedback", publish_feedback_, bool(false));  // debug
   nh.param("activate_controller_node_output", activate_controller_node_output_, bool(false));  // debug
   nh.param("plotting_result", plotting_result_, bool(false));  // plotting
 

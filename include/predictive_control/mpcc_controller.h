@@ -63,6 +63,8 @@
 #include <predictive_control/trajActionGoal.h>
 
 #include <nav_msgs/Path.h>
+#include <nav_msgs/OccupancyGrid.h>
+#include <nav_msgs/GetMap.h>
 
 // Add obstacle messages
 #include <obstacle_feed/Obstacle.h>
@@ -177,6 +179,9 @@ public:
     }
 
     /** public data member */
+
+    ros::ServiceClient map_service_;
+
     // joint state subsciber to get current joint value
     ros::Subscriber robot_state_sub_;
 
@@ -192,11 +197,14 @@ public:
     ros::Publisher cartesian_error_pub_;
 
     // publish trajectory
-    ros::Publisher traj_pub_, tr_path_pub_, pred_traj_pub_, pred_cmd_pub_,cost_pub_,robot_collision_space_pub_, spline_traj_pub_,spline_traj_pub2_, contour_error_pub_, feedback_pub_;
+    ros::Publisher traj_pub_, tr_path_pub_, pred_traj_pub_, pred_cmd_pub_,cost_pub_,robot_collision_space_pub_, spline_traj_pub_,spline_traj_pub2_, contour_error_pub_, feedback_pub_, collision_free_pub_;
 	//Predicted trajectory
 	nav_msgs::Path pred_traj_;
 	nav_msgs::Path pred_cmd_;
 	nav_msgs::Path spline_traj_,spline_traj2_;
+	nav_msgs::OccupancyGrid environment_grid_;
+    nav_msgs::GetMap map_srv_;
+
 	int traj_i;
 	//Controller options
 	bool enable_output_;
@@ -223,6 +231,7 @@ public:
     int n_search_points_;
     bool goal_reached_;
     bool last_poly_;
+    double collision_free_r_max_, collision_free_r1_, collision_free_r2_;
 
 private:
 
@@ -244,6 +253,7 @@ private:
 
     // activate output of this node
     bool activate_debug_output_;
+    bool publish_feedback_;
     // used to set desired position by mannually or using interactive marker node
     bool tracking_;
     std::string target_frame_;
@@ -276,7 +286,7 @@ private:
 	int idx, idy;
 	double epsilon_;
 
-	visualization_msgs::Marker ellips1;
+	visualization_msgs::Marker ellips1, ellips2;
 
     // Kinematic variables
 	//To be done kinematic model car
@@ -365,6 +375,14 @@ private:
     inline void Ref_path(std::vector<double> x, std::vector<double> y, std::vector<double> theta);
 
     void ConstructRefPath();
+
+    void ComputeCollisionFreeArea();
+
+    double searchRadius(int x_i, int y_i);
+
+    int getOccupancy(int x_i, int y_i);
+
+    void publishPosConstraint();
 
     void publishFeedback(int& it, double& time);
 

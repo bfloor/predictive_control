@@ -6,6 +6,7 @@ activate_output: true
 activate_debug_output: false
 activate_controller_node_output: true
 plotting_result: true
+publish_feedback: false
 
 # Clock frequency //hz
 clock_frequency: 20
@@ -29,6 +30,13 @@ repulsive_weight: 0.1
 reference_velocity: 0.5
 
 # Parameters for predefined reference path
+global_path:
+      x: [0, 6, 8, 8]
+      y: [0, 0, -2, -10]
+      theta: [0, 0, -1.5708, -1.5708]
+      n_points_clothoid: 10
+      n_points_spline: 10
+
 #global_path:
 #      x: [0, 4, 8]
 #      y: [0, 0, 0]
@@ -36,12 +44,12 @@ reference_velocity: 0.5
 #      n_points_clothoid: 20
 #      n_points_spline: 20
 
-global_path:
-      x: [-2, 0, 1, -1, 0, 1.5]
-      y: [0, 2, 1, 2, 0, 0]
-      theta: [0, 1.5708, 3.1416, 3.1416, 0, 0]
-      n_points_clothoid: 10
-      n_points_spline: 10
+#global_path:
+#      x: [-2, 0, 1, -1, 0, 1.5]
+#      y: [0, 2, 1, 2, 0, 0]
+#      theta: [0, 1.5708, 3.1416, 3.1416, 0, 0]
+#      n_points_clothoid: 10
+#      n_points_spline: 10
 
 # Parameters for collision constraints
 obstacles:

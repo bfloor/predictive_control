@@ -52,6 +52,7 @@ bool MPCC::initialize()
 
         //DEBUG
         activate_debug_output_ = controller_config_->activate_debug_output_;
+        publish_feedback_ = controller_config_->publish_feedback_;
         tracking_ = true;
         move_action_result_.reach = false;
         plotting_result_ = controller_config_->plotting_result_;
@@ -88,6 +89,8 @@ bool MPCC::initialize()
 
         obstacle_feed_sub_ = nh.subscribe(controller_config_->sub_ellipse_topic_, 1, &MPCC::ObstacleCallBack, this);
 
+        map_service_ = nh.serviceClient<nav_msgs::GetMap>("static_map");
+
         //Publishers
         traj_pub_ = nh.advertise<visualization_msgs::MarkerArray>("pd_trajectory",1);
 		pred_cmd_pub_ = nh.advertise<nav_msgs::Path>("predicted_cmd",1);
@@ -100,6 +103,7 @@ bool MPCC::initialize()
 		spline_traj_pub_ = nh.advertise<nav_msgs::Path>("spline_traj",1);
 		spline_traj_pub2_ = nh.advertise<nav_msgs::Path>("reference_trajectory",1);
 		feedback_pub_ = nh.advertise<predictive_control::control_feedback>("controller_feedback",1);
+        collision_free_pub_ = nh.advertise<visualization_msgs::MarkerArray>("collision_free_circles",1);
 
 		ros::Duration(1).sleep();
 
@@ -180,6 +184,18 @@ bool MPCC::initialize()
 		ellips1.scale.y = r_discs_*2.0;
 		ellips1.scale.z = 0.05;
 
+        ellips2.type = visualization_msgs::Marker::CYLINDER;
+        ellips2.id = 400;
+        ellips2.color.b = 0.5;
+        ellips2.color.a = 0.4;
+        ellips2.header.frame_id = controller_config_->tracking_frame_;
+        ellips2.ns = "trajectory";
+        ellips2.action = visualization_msgs::Marker::ADD;
+        ellips2.lifetime = ros::Duration(0.1);
+        ellips2.scale.x = 1.0*2.0;
+        ellips2.scale.y = 1.0*2.0;
+        ellips2.scale.z = 0.05;
+
 		// Initialize pregenerated mpc solver
 		acado_initializeSolver( );
 
@@ -195,6 +211,7 @@ bool MPCC::initialize()
         }
 
 		traj_i =0;
+
 		ROS_WARN("PREDICTIVE CONTROL INTIALIZED!!");
 		return true;
 	}
@@ -312,6 +329,7 @@ void MPCC::runNode(const ros::TimerEvent &event)
 		    if (traj_i + 3 == ss.size()){
                 last_poly_ = true;
                 traj_i++;
+//                ComputeCollisionFreeArea();
                 ROS_ERROR_STREAM("LAST POLYNOMIAL");
                 ROS_ERROR_STREAM("SWITCH SPLINE " << acadoVariables.x[3]);
 		    }
@@ -322,6 +340,7 @@ void MPCC::runNode(const ros::TimerEvent &event)
 			    traj_i++;
                 //acadoVariables.x[3]-=ss[traj_i];
                 ROS_ERROR_STREAM("SWITCH SPLINE " << acadoVariables.x[3]);
+                ComputeCollisionFreeArea();
 		    }
         }
 
@@ -364,7 +383,7 @@ void MPCC::runNode(const ros::TimerEvent &event)
 			acadoVariables.od[(ACADO_NOD * N_iter) + 18 ] = cost_control_weight_factors_(0);      // weight factor on theta
 			acadoVariables.od[(ACADO_NOD * N_iter) + 19 ] = cost_control_weight_factors_(1);      // weight factor on v
 
-			        acadoVariables.od[(ACADO_NOD * N_iter) + 20 ] = ss[traj_i];
+            acadoVariables.od[(ACADO_NOD * N_iter) + 20 ] = ss[traj_i];
             acadoVariables.od[(ACADO_NOD * N_iter) + 21 ] = ss[traj_i + 1];
 
             if (goal_reached_){
@@ -396,6 +415,10 @@ void MPCC::runNode(const ros::TimerEvent &event)
             acadoVariables.od[(ACADO_NOD * N_iter) + 36] = obstacles_.Obstacles[1].pose.orientation.z;   // heading of obstacle 2
             acadoVariables.od[(ACADO_NOD * N_iter) + 37] = obstacles_.Obstacles[1].major_semiaxis;       // major semiaxis of obstacle 2
             acadoVariables.od[(ACADO_NOD * N_iter) + 38] = obstacles_.Obstacles[1].minor_semiaxis;       // minor semiaxis of obstacle 2
+
+            // Set radius for convex collision free circles
+            acadoVariables.od[(ACADO_NOD * N_iter) + 39] = collision_free_r1_;
+            acadoVariables.od[(ACADO_NOD * N_iter) + 40] = collision_free_r2_;
     }
 
         acadoVariables.x0[ 0 ] = current_state_(0);
@@ -432,13 +455,16 @@ void MPCC::runNode(const ros::TimerEvent &event)
 
         publishPredictedTrajectory();
 		publishPredictedCollisionSpace();
+        publishPosConstraint();
 		publishPredictedOutput();
 		publishAnaliticSplineTrajectory();
 		broadcastPathPose();
         publishContourError();
 		cost_.data = acado_getObjective();
 		publishCost();
-        publishFeedback(j,te_);
+
+		if (publish_feedback_){publishFeedback(j,te_);}
+
 		ROS_INFO_STREAM("Solve time " << te_ * 1e6 << " us");
 
     // publish zero controlled velocity
@@ -572,69 +598,6 @@ void MPCC::Ref_path(std::vector<double> x,std::vector<double> y, std::vector<dou
 
 void MPCC::ConstructRefPath(){
 
-//    // Large path
-//    X_road[0] = -6;
-//    Y_road[0] = 0;
-//    Theta_road[0] = 0;
-//
-//    X_road[1] = 0;
-//    Y_road[1] = 6;
-//    Theta_road[1] = M_PI/2.0;
-//
-//    X_road[2] = 6;
-//    Y_road[2] = 0;
-//    Theta_road[2] = M_PI;
-//
-//    X_road[2] = 0;
-//    Y_road[3] = -3;
-//    Theta_road[3] = M_PI/2;
-
-//    X_road[0] = 0;
-//    X_road[1] = 3;
-//    X_road[2] = 6;
-//
-//    Y_road[0] = 0;
-//    Y_road[1] = 0;
-//    Y_road[2] = 0;
-//
-//    Theta_road[0] = 0;
-//    Theta_road[1] = 0;
-//    Theta_road[2] = 0;
-
-//    X_road[0] = -2;
-//    X_road[1] = 0;
-//    X_road[2] = 1;
-//    X_road[3] = -1;
-//    X_road[4] = 0;
-//    X_road[5] = 1.5;
-//
-//    Y_road[0] = 0;
-//    Y_road[1] = 2;
-//    Y_road[2] = 1;
-//    Y_road[3] = 2;
-//    Y_road[4] = 0;
-//    Y_road[5] = 0;
-//
-//    Theta_road[0] = 0;
-//    Theta_road[1] = M_PI/2;
-//    Theta_road[2] = M_PI;
-//    Theta_road[3] = M_PI;
-//    Theta_road[4] = 0;
-//    Theta_road[5] = 0;
-
-
-//    X_road[0] = 0;
-//    X_road[1] = 10;
-//    X_road[2] = 10;
-//
-//    Y_road[0] = 0;
-//    Y_road[1] = 0;
-//    Y_road[2] = 10;
-//
-//    Theta_road[0] = 0;
-//    Theta_road[1] = M_PI/2.0;
-//    Theta_road[2] = M_PI/2.0;
-
     for (int ref_point_it = 0; ref_point_it < controller_config_->ref_x_.size(); ref_point_it++)
     {
         X_road[ref_point_it] = controller_config_->ref_x_.at(ref_point_it);
@@ -643,6 +606,204 @@ void MPCC::ConstructRefPath(){
     }
 
     Ref_path(X_road, Y_road, Theta_road);
+}
+
+void MPCC::ComputeCollisionFreeArea()
+{
+    acado_timer t;
+    acado_tic( &t );
+
+    int x_path_i, y_path_i;
+    double x_path, y_path, theta_search, r;
+
+    int search_steps = 10;
+
+    collision_free_r1_ = collision_free_r_max_;
+    collision_free_r2_ = collision_free_r_max_;
+
+//    ROS_INFO_STREAM("ss[traj_i] = " << ss[traj_i] << " ss[traj_i + 1] = " << ss[traj_i + 1]);
+
+    for (int step_it = 0; step_it < search_steps; step_it++)
+    {
+//        theta_search = ss[traj_i] + step_it*(ss[traj_i] + ss[traj_i + 1])/search_steps;
+        theta_search = step_it*(ss[traj_i + 1] - ss[traj_i])/search_steps;
+
+//        ROS_INFO_STREAM("theta_search = " << theta_search);
+
+        x_path = (ref_path_x.m_a[traj_i]*(theta_search)*(theta_search)*(theta_search) + ref_path_x.m_b[traj_i]*(theta_search)*(theta_search) + ref_path_x.m_c[traj_i]*(theta_search) + ref_path_x.m_d[traj_i]);
+        y_path = (ref_path_y.m_a[traj_i]*(theta_search)*(theta_search)*(theta_search) + ref_path_y.m_b[traj_i]*(theta_search)*(theta_search) + ref_path_y.m_c[traj_i]*(theta_search) + ref_path_y.m_d[traj_i]);
+
+        x_path_i = (int) round((x_path - environment_grid_.info.origin.position.x)/environment_grid_.info.resolution);
+        y_path_i = (int) round((y_path - environment_grid_.info.origin.position.y)/environment_grid_.info.resolution);
+
+        ROS_INFO_STREAM( "Segment " << traj_i << " : searching around: x = " << x_path << ", y = " << y_path << " at index [" << x_path_i << ", " << y_path_i << "]." );
+
+        r = searchRadius(x_path_i,y_path_i);
+//
+////        ROS_INFO_STREAM("Found r = " << r);
+//
+        if (r < collision_free_r1_)
+        {
+            collision_free_r1_ = r;
+//            ROS_INFO_STREAM("Minimum r = " << r);
+        }
+
+    }
+
+//    ROS_INFO_STREAM("ss[traj_i + 1] = " << ss[traj_i + 1] << " ss[traj_i + 2] = " << ss[traj_i + 2]);
+
+    for (int step_it = 0; step_it < search_steps; step_it++)
+    {
+//        theta_search = ss[traj_i + 1] + step_it*(ss[traj_i + 1] + ss[traj_i + 2])/search_steps;
+        theta_search = step_it*(ss[traj_i + 2] - ss[traj_i] + 1)/search_steps;
+
+//        ROS_INFO_STREAM("theta_search = " << theta_search);
+
+        x_path = (ref_path_x.m_a[traj_i + 1]*(theta_search)*(theta_search)*(theta_search) + ref_path_x.m_b[traj_i + 1]*(theta_search)*(theta_search) + ref_path_x.m_c[traj_i + 1]*(theta_search) + ref_path_x.m_d[traj_i + 1]);
+        y_path = (ref_path_y.m_a[traj_i + 1]*(theta_search)*(theta_search)*(theta_search) + ref_path_y.m_b[traj_i + 1]*(theta_search)*(theta_search) + ref_path_y.m_c[traj_i + 1]*(theta_search) + ref_path_y.m_d[traj_i + 1]);
+
+        x_path_i = (int) round((x_path - environment_grid_.info.origin.position.x)/environment_grid_.info.resolution);
+        y_path_i = (int) round((y_path - environment_grid_.info.origin.position.y)/environment_grid_.info.resolution);
+
+        ROS_INFO_STREAM( "Segment " << (traj_i + 1) << " : searching around: x = " << x_path << ", y = " << y_path << " at index [" << x_path_i << ", " << y_path_i << "]." );
+
+        r = searchRadius(x_path_i,y_path_i);
+
+        if (r < collision_free_r2_)
+        {
+            collision_free_r2_ = r;
+//            ROS_INFO_STREAM("Found r = " << r);
+        }
+    }
+
+//    x_path = (ref_path_x.m_a[traj_i]*(acadoVariables.x[3]-ss[traj_i])*(acadoVariables.x[3]-ss[traj_i])*(acadoVariables.x[3]-ss[traj_i]) + ref_path_x.m_b[traj_i]*(acadoVariables.x[3]-ss[traj_i])*(acadoVariables.x[3]-ss[traj_i]) + ref_path_x.m_c[traj_i]*(acadoVariables.x[3]-ss[traj_i]) + ref_path_x.m_d[traj_i]);
+//    y_path = (ref_path_y.m_a[traj_i]*(acadoVariables.x[3]-ss[traj_i])*(acadoVariables.x[3]-ss[traj_i])*(acadoVariables.x[3]-ss[traj_i]) + ref_path_y.m_b[traj_i]*(acadoVariables.x[3]-ss[traj_i])*(acadoVariables.x[3]-ss[traj_i]) + ref_path_y.m_c[traj_i]*(acadoVariables.x[3]-ss[traj_i]) + ref_path_y.m_d[traj_i]);
+
+//    x_path_i = (int) round((x_path - environment_grid_.info.origin.position.x)/environment_grid_.info.resolution);
+//    y_path_i = (int) round((y_path - environment_grid_.info.origin.position.y)/environment_grid_.info.resolution);
+
+//    std::cout << "x_path: " << x_path << " y_path: " << y_path << std::endl;
+//    std::cout << "x_path_i: " << x_path_i  << " y_path_i: " << y_path_i << std::endl;
+//    std::cout << "occupancy: " << getOccupancy(x_path_i,y_path_i) << std::endl;
+    ROS_INFO_STREAM( "Segment " << traj_i << " : r1 =  " << collision_free_r1_ << " r2 =  " << collision_free_r2_);
+
+    te_ = acado_toc(&t);
+    ROS_INFO_STREAM("Free space solve time " << te_ * 1e6 << " us");
+}
+
+double MPCC::searchRadius(int x_i, int y_i)
+{
+
+    double r = collision_free_r_max_, r_ = 0;
+    int occupied_ = 90;
+    int search_radius = 1;
+
+    int search_x_it, search_y_it;
+
+    // Search until an occupied region is found or until the maximum radius is obtained
+    while (r == collision_free_r_max_ && search_radius < collision_free_r_max_/environment_grid_.info.resolution)
+    {
+
+        for (int search_x_it = -search_radius; search_x_it <= search_radius; search_x_it++ ) {
+
+            if (x_i + search_x_it < 0){search_x_it = -x_i;}
+            if (x_i + search_x_it > environment_grid_.info.width){search_x_it = environment_grid_.info.width - x_i;}
+
+            search_y_it = -search_radius;
+            if (y_i + search_y_it < 0){search_y_it = -y_i;}
+            if (getOccupancy(x_i + search_x_it,y_i + search_y_it) > occupied_)
+            {
+                r_ = sqrt(pow(search_x_it,2) + pow(search_y_it,2))*environment_grid_.info.resolution;
+
+                if (r_ < r)
+                {
+                    r = r_;
+                }
+
+            }
+
+            search_y_it = search_radius;
+            if (y_i + search_y_it > environment_grid_.info.height){search_y_it = environment_grid_.info.height - y_i;}
+            if (getOccupancy(x_i + search_x_it,y_i + search_y_it) > occupied_)
+            {
+                r_ = sqrt(pow(search_x_it,2) + pow(search_y_it,2))*environment_grid_.info.resolution;
+
+                if (r_ < r)
+                {
+                    r = r_;
+                }
+
+            }
+        }
+
+        for (int search_y_it = -search_radius; search_y_it <= search_radius; search_y_it++ ) {
+
+            if (y_i + search_y_it < 0){search_y_it = -y_i;}
+            if (y_i + search_y_it > environment_grid_.info.height){search_y_it = environment_grid_.info.height - y_i;}
+
+            search_x_it = -search_radius;
+            if (x_i + search_x_it < 0){search_x_it = -x_i;}
+            if (getOccupancy(x_i + search_x_it,y_i + search_y_it) > occupied_)
+            {
+                r_ = sqrt(pow(search_x_it,2) + pow(search_y_it,2))*environment_grid_.info.resolution;
+
+                if (r_ < r)
+                {
+                    r = r_;
+                }
+
+            }
+
+            search_x_it = search_radius;
+            if (x_i + search_x_it > environment_grid_.info.width){search_x_it = environment_grid_.info.width - x_i;}
+            if (getOccupancy(x_i + search_x_it,y_i + search_y_it) > occupied_)
+            {
+                r_ = sqrt(pow(search_x_it,2) + pow(search_y_it,2))*environment_grid_.info.resolution;
+
+                if (r_ < r)
+                {
+                    r = r_;
+                }
+
+            }
+        }
+
+//
+//        for (search_x_it = -search_radius; search_x_it <= search_radius; search_x_it++ )
+//        {
+//            for (search_y_it = -search_radius; search_y_it <= search_radius; search_y_it++ )
+//            {
+//
+//                if (x_i + search_x_it < 0){search_x_it = -x_i;}
+//                if (x_i + search_x_it > environment_grid_.info.width){search_x_it = environment_grid_.info.width - x_i;}
+//                if (y_i + search_y_it < 0){search_y_it = -y_i;}
+//                if (y_i + search_y_it > environment_grid_.info.height){search_y_it = environment_grid_.info.height - y_i;}
+//
+//                if (getOccupancy(x_i + search_x_it,y_i + search_y_it) > occupied_)
+//                {
+//                    r_ = sqrt(pow(search_x_it,2) + pow(search_y_it,2))*environment_grid_.info.resolution;
+//
+//                    if (r_ < r)
+//                    {
+//                        r = r_;
+////                        std::cout << "min_r " << r << std::endl;
+//                    }
+//
+//                }
+//            }
+//        }
+
+        search_radius++;
+//        std::cout << "search radius: " << search_radius << std::endl;
+    }
+
+    return r;
+}
+
+int MPCC::getOccupancy(int x_i, int y_i)
+{
+    return environment_grid_.data[environment_grid_.info.width*y_i + x_i];
+
 }
 
 void MPCC::moveitGoalCB()
@@ -674,12 +835,22 @@ void MPCC::moveitGoalCB()
         traj_i = 0;
 		goal_reached_ = false;
 		last_poly_ = false;
+
+        if (map_service_.call(map_srv_))
+        {
+            ROS_ERROR("Service GetMap succeeded.");
+            environment_grid_ = map_srv_.response.map;
+        }
+        else
+        {
+            ROS_ERROR("Service GetMap failed.");
+        }
+
         ConstructRefPath();
-
-		//ref_path_x.set_points(S, X);
-		//ref_path_y.set_points(S, Y);
-
 		publishSplineTrajectory();
+
+        ComputeCollisionFreeArea();
+
     }
 }
 
@@ -696,6 +867,7 @@ void MPCC::reconfigureCallback(predictive_control::PredictiveControllerConfig& c
     repulsive_weight_ = config.WR;
 
     reference_velocity_ = config.vRef;
+    collision_free_r_max_ = config.rMax;
 
 	enable_output_ = config.enable_output;
 	n_iterations_ = config.n_iterations;
@@ -912,6 +1084,36 @@ void MPCC::publishContourError(void){
     errors.data[1] = lag_error_;
 
     contour_error_pub_.publish(errors);
+}
+
+void MPCC::publishPosConstraint(){
+
+    visualization_msgs::MarkerArray collision_free;
+
+    for (int i = 0; i < ACADO_N; i++)
+    {
+
+        if (acadoVariables.x[i * ACADO_NX + 3] > ss[traj_i + 1]){
+            ellips2.scale.x = collision_free_r2_*2.0;
+            ellips2.scale.y = collision_free_r2_*2.0;
+        }
+        else
+        {
+            ellips2.scale.x = collision_free_r1_*2.0;
+            ellips2.scale.y = collision_free_r1_*2.0;
+        }
+
+        ellips2.id = 400+i;
+        ellips2.pose.position.x = (ref_path_x.m_a[traj_i]*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i])*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i])*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i]) + ref_path_x.m_b[traj_i]*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i])*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i]) + ref_path_x.m_c[traj_i]*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i]) + ref_path_x.m_d[traj_i]);
+        ellips2.pose.position.y = (ref_path_y.m_a[traj_i]*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i])*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i])*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i]) + ref_path_y.m_b[traj_i]*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i])*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i]) + ref_path_y.m_c[traj_i]*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i]) + ref_path_y.m_d[traj_i]);
+        ellips2.pose.orientation.x = 0;
+        ellips2.pose.orientation.y = 0;
+        ellips2.pose.orientation.z = 0;
+        ellips2.pose.orientation.w = 1;
+        collision_free.markers.push_back(ellips2);
+    }
+
+    collision_free_pub_.publish(collision_free);
 }
 
 void MPCC::publishFeedback(int& it, double& time)
