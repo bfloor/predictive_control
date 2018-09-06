@@ -3,6 +3,7 @@ devel/
 build/
 bin/
 lib/
+cmake-build-debug/
 msg_gen/
 srv_gen/
 msg/*Action.msg
