@@ -329,7 +329,6 @@ void MPCC::runNode(const ros::TimerEvent &event)
 		    if (traj_i + 3 == ss.size()){
                 last_poly_ = true;
                 traj_i++;
-//                ComputeCollisionFreeArea();
                 ROS_ERROR_STREAM("LAST POLYNOMIAL");
                 ROS_ERROR_STREAM("SWITCH SPLINE " << acadoVariables.x[3]);
 		    }
@@ -344,14 +343,14 @@ void MPCC::runNode(const ros::TimerEvent &event)
 		    }
         }
 
-        ROS_INFO_STREAM("traj_i: " << traj_i);
-        ROS_INFO_STREAM("ss_length: " << ss.size());
+//        ROS_INFO_STREAM("traj_i: " << traj_i);
+//        ROS_INFO_STREAM("ss_length: " << ss.size());
 
         if(idx ==1) {
             double smin;
             smin = spline_closest_point(ss[traj_i], 100, acadoVariables.x[ACADO_NX+3], window_size_, n_search_points_);
             acadoVariables.x[3] = smin;
-            ROS_ERROR_STREAM("smin: " << smin);
+//            ROS_ERROR_STREAM("smin: " << smin);
         }
         else
             acadoVariables.x[3] = acadoVariables.x[3];
@@ -427,8 +426,8 @@ void MPCC::runNode(const ros::TimerEvent &event)
 		acadoVariables.x0[ 3 ] = acadoVariables.x[3];
         acadoVariables.x0[ 4 ] = 0.0000001;             //dummy state
 
-        ROS_INFO_STREAM("ss[traj_i]: " << ss[traj_i]);
-        ROS_INFO_STREAM("acadoVariables.x[3]: " << acadoVariables.x[3]);
+//        ROS_INFO_STREAM("ss[traj_i]: " << ss[traj_i]);
+//        ROS_INFO_STREAM("acadoVariables.x[3]: " << acadoVariables.x[3]);
 
         acado_preparationStep();
 
@@ -444,7 +443,7 @@ void MPCC::runNode(const ros::TimerEvent &event)
 
             acado_feedbackStep();
 
-            printf("\tReal-Time Iteration:  KKT Tolerance = %.3e\n\n", acado_getKKT());
+//            printf("\tReal-Time Iteration:  KKT Tolerance = %.3e\n\n", acado_getKKT());
 			j++;    //        acado_printDifferentialVariables();
         }
 
@@ -465,7 +464,7 @@ void MPCC::runNode(const ros::TimerEvent &event)
 
 		if (publish_feedback_){publishFeedback(j,te_);}
 
-		ROS_INFO_STREAM("Solve time " << te_ * 1e6 << " us");
+//		ROS_INFO_STREAM("Solve time " << te_ * 1e6 << " us");
 
     // publish zero controlled velocity
         if (!tracking_)
@@ -621,7 +620,7 @@ void MPCC::ComputeCollisionFreeArea()
     collision_free_r1_ = collision_free_r_max_;
     collision_free_r2_ = collision_free_r_max_;
 
-//    ROS_INFO_STREAM("ss[traj_i] = " << ss[traj_i] << " ss[traj_i + 1] = " << ss[traj_i + 1]);
+    ROS_INFO_STREAM("ss[traj_i] = " << ss[traj_i] << " ss[traj_i + 1] = " << ss[traj_i + 1] << " ss[traj_i + 2] = " << ss[traj_i + 2]);
 
     for (int step_it = 0; step_it < search_steps; step_it++)
     {
@@ -655,7 +654,7 @@ void MPCC::ComputeCollisionFreeArea()
     for (int step_it = 0; step_it < search_steps; step_it++)
     {
 //        theta_search = ss[traj_i + 1] + step_it*(ss[traj_i + 1] + ss[traj_i + 2])/search_steps;
-        theta_search = step_it*(ss[traj_i + 2] - ss[traj_i] + 1)/search_steps;
+        theta_search = step_it*(ss[traj_i + 2] - ss[traj_i + 1])/search_steps;
 
 //        ROS_INFO_STREAM("theta_search = " << theta_search);
 
@@ -975,16 +974,16 @@ void MPCC::publishSplineTrajectory(void)
 	}
 
 	ROS_INFO_STREAM("REF_PATH_X size:  " << ref_path_x.m_a.size());
-	for(int i =0; i< ref_path_x.m_a.size();i++){
-		ROS_INFO_STREAM("REF_PATH_Xa:  " << i << "  " << ref_path_x.m_a[i]);
-		ROS_INFO_STREAM("REF_PATH_Xb:  " << i << "  " << ref_path_x.m_b[i]);
-		ROS_INFO_STREAM("REF_PATH_Xc:  " << i << "  " << ref_path_x.m_c[i]);
-		ROS_INFO_STREAM("REF_PATH_Xd:  " << i << "  " << ref_path_x.m_d[i]);
-		ROS_INFO_STREAM("REF_PATH_Ya:  " << i << "  " << ref_path_y.m_a[i]);
-		ROS_INFO_STREAM("REF_PATH_Yb:  " << i << "  " << ref_path_y.m_b[i]);
-		ROS_INFO_STREAM("REF_PATH_Yc:  " << i << "  " << ref_path_y.m_c[i]);
-		ROS_INFO_STREAM("REF_PATH_Yd:  " << i << "  " << ref_path_y.m_d[i]);
-	}
+//	for(int i =0; i< ref_path_x.m_a.size();i++){
+//		ROS_INFO_STREAM("REF_PATH_Xa:  " << i << "  " << ref_path_x.m_a[i]);
+//		ROS_INFO_STREAM("REF_PATH_Xb:  " << i << "  " << ref_path_x.m_b[i]);
+//		ROS_INFO_STREAM("REF_PATH_Xc:  " << i << "  " << ref_path_x.m_c[i]);
+//		ROS_INFO_STREAM("REF_PATH_Xd:  " << i << "  " << ref_path_x.m_d[i]);
+//		ROS_INFO_STREAM("REF_PATH_Ya:  " << i << "  " << ref_path_y.m_a[i]);
+//		ROS_INFO_STREAM("REF_PATH_Yb:  " << i << "  " << ref_path_y.m_b[i]);
+//		ROS_INFO_STREAM("REF_PATH_Yc:  " << i << "  " << ref_path_y.m_c[i]);
+//		ROS_INFO_STREAM("REF_PATH_Yd:  " << i << "  " << ref_path_y.m_d[i]);
+//	}
 
 	spline_traj_pub_.publish(spline_traj_);
 }
