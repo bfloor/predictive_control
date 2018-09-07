@@ -128,10 +128,10 @@ bool MPCC::initialize()
 		spline_traj2_.poses.resize(100);
 		pred_traj_.poses.resize(ACADO_N);
 		pred_cmd_.poses.resize(ACADO_N);
-		pred_traj_.header.frame_id = "odom";
+		pred_traj_.header.frame_id = controller_config_->tracking_frame_;
 		for(int i=0;i < ACADO_N; i++)
 		{
-			pred_traj_.poses[i].header.frame_id = "odom";
+			pred_traj_.poses[i].header.frame_id = controller_config_->tracking_frame_;
 		}
 
 		// Initialize pregenerated mpc solver
@@ -186,8 +186,10 @@ bool MPCC::initialize()
 
         ellips2.type = visualization_msgs::Marker::CYLINDER;
         ellips2.id = 400;
-        ellips2.color.b = 0.5;
-        ellips2.color.a = 0.4;
+        ellips2.color.r = 0.5;
+        ellips2.color.g = 0.5;
+        ellips2.color.b = 0.0;
+        ellips2.color.a = 0.1;
         ellips2.header.frame_id = controller_config_->tracking_frame_;
         ellips2.ns = "trajectory";
         ellips2.action = visualization_msgs::Marker::ADD;
@@ -246,7 +248,7 @@ void MPCC::broadcastPathPose(){
 
 	geometry_msgs::TransformStamped transformStamped;
 	transformStamped.header.stamp = ros::Time::now();
-	transformStamped.header.frame_id = "odom";
+	transformStamped.header.frame_id = controller_config_->tracking_frame_;
 	transformStamped.child_frame_id = "path";
 
 	transformStamped.transform.translation.x = ref_path_x(acadoVariables.x[3]);
@@ -267,7 +269,7 @@ void MPCC::broadcastTF(){
 
 	geometry_msgs::TransformStamped transformStamped;
 	transformStamped.header.stamp = ros::Time::now();
-	transformStamped.header.frame_id = "odom";
+	transformStamped.header.frame_id = controller_config_->tracking_frame_;
 	transformStamped.child_frame_id = controller_config_->robot_base_link_;
 	if(!enable_output_){
 		transformStamped.transform.translation.x = current_state_(0);
@@ -635,12 +637,12 @@ void MPCC::ComputeCollisionFreeArea()
         x_path_i = (int) round((x_path - environment_grid_.info.origin.position.x)/environment_grid_.info.resolution);
         y_path_i = (int) round((y_path - environment_grid_.info.origin.position.y)/environment_grid_.info.resolution);
 
-        ROS_INFO_STREAM( "Segment " << traj_i << " : searching around: x = " << x_path << ", y = " << y_path << " at index [" << x_path_i << ", " << y_path_i << "]." );
+//        ROS_INFO_STREAM( "Segment " << traj_i << " : searching around: x = " << x_path << ", y = " << y_path << " at index [" << x_path_i << ", " << y_path_i << "]." );
 
         r = searchRadius(x_path_i,y_path_i);
-//
-////        ROS_INFO_STREAM("Found r = " << r);
-//
+
+//        ROS_INFO_STREAM("Found r = " << r);
+
         if (r < collision_free_r1_)
         {
             collision_free_r1_ = r;
@@ -664,7 +666,7 @@ void MPCC::ComputeCollisionFreeArea()
         x_path_i = (int) round((x_path - environment_grid_.info.origin.position.x)/environment_grid_.info.resolution);
         y_path_i = (int) round((y_path - environment_grid_.info.origin.position.y)/environment_grid_.info.resolution);
 
-        ROS_INFO_STREAM( "Segment " << (traj_i + 1) << " : searching around: x = " << x_path << ", y = " << y_path << " at index [" << x_path_i << ", " << y_path_i << "]." );
+//        ROS_INFO_STREAM( "Segment " << (traj_i + 1) << " : searching around: x = " << x_path << ", y = " << y_path << " at index [" << x_path_i << ", " << y_path_i << "]." );
 
         r = searchRadius(x_path_i,y_path_i);
 
@@ -684,6 +686,7 @@ void MPCC::ComputeCollisionFreeArea()
 //    std::cout << "x_path: " << x_path << " y_path: " << y_path << std::endl;
 //    std::cout << "x_path_i: " << x_path_i  << " y_path_i: " << y_path_i << std::endl;
 //    std::cout << "occupancy: " << getOccupancy(x_path_i,y_path_i) << std::endl;
+
     ROS_INFO_STREAM( "Segment " << traj_i << " : r1 =  " << collision_free_r1_ << " r2 =  " << collision_free_r2_);
 
     te_ = acado_toc(&t);
@@ -766,31 +769,6 @@ double MPCC::searchRadius(int x_i, int y_i)
 
             }
         }
-
-//
-//        for (search_x_it = -search_radius; search_x_it <= search_radius; search_x_it++ )
-//        {
-//            for (search_y_it = -search_radius; search_y_it <= search_radius; search_y_it++ )
-//            {
-//
-//                if (x_i + search_x_it < 0){search_x_it = -x_i;}
-//                if (x_i + search_x_it > environment_grid_.info.width){search_x_it = environment_grid_.info.width - x_i;}
-//                if (y_i + search_y_it < 0){search_y_it = -y_i;}
-//                if (y_i + search_y_it > environment_grid_.info.height){search_y_it = environment_grid_.info.height - y_i;}
-//
-//                if (getOccupancy(x_i + search_x_it,y_i + search_y_it) > occupied_)
-//                {
-//                    r_ = sqrt(pow(search_x_it,2) + pow(search_y_it,2))*environment_grid_.info.resolution;
-//
-//                    if (r_ < r)
-//                    {
-//                        r = r_;
-////                        std::cout << "min_r " << r << std::endl;
-//                    }
-//
-//                }
-//            }
-//        }
 
         search_radius++;
 //        std::cout << "search radius: " << search_radius << std::endl;
@@ -1095,16 +1073,18 @@ void MPCC::publishPosConstraint(){
         if (acadoVariables.x[i * ACADO_NX + 3] > ss[traj_i + 1]){
             ellips2.scale.x = collision_free_r2_*2.0;
             ellips2.scale.y = collision_free_r2_*2.0;
+            ellips2.pose.position.x = (ref_path_x.m_a[traj_i + 1]*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i + 1])*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i + 1])*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i + 1]) + ref_path_x.m_b[traj_i + 1]*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i + 1])*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i + 1]) + ref_path_x.m_c[traj_i + 1]*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i + 1]) + ref_path_x.m_d[traj_i + 1]);
+            ellips2.pose.position.y = (ref_path_y.m_a[traj_i + 1]*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i + 1])*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i + 1])*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i + 1]) + ref_path_y.m_b[traj_i + 1]*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i + 1])*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i + 1]) + ref_path_y.m_c[traj_i + 1]*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i + 1]) + ref_path_y.m_d[traj_i + 1]);
         }
         else
         {
             ellips2.scale.x = collision_free_r1_*2.0;
             ellips2.scale.y = collision_free_r1_*2.0;
+            ellips2.pose.position.x = (ref_path_x.m_a[traj_i]*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i])*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i])*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i]) + ref_path_x.m_b[traj_i]*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i])*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i]) + ref_path_x.m_c[traj_i]*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i]) + ref_path_x.m_d[traj_i]);
+            ellips2.pose.position.y = (ref_path_y.m_a[traj_i]*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i])*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i])*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i]) + ref_path_y.m_b[traj_i]*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i])*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i]) + ref_path_y.m_c[traj_i]*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i]) + ref_path_y.m_d[traj_i]);
         }
 
         ellips2.id = 400+i;
-        ellips2.pose.position.x = (ref_path_x.m_a[traj_i]*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i])*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i])*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i]) + ref_path_x.m_b[traj_i]*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i])*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i]) + ref_path_x.m_c[traj_i]*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i]) + ref_path_x.m_d[traj_i]);
-        ellips2.pose.position.y = (ref_path_y.m_a[traj_i]*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i])*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i])*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i]) + ref_path_y.m_b[traj_i]*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i])*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i]) + ref_path_y.m_c[traj_i]*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i]) + ref_path_y.m_d[traj_i]);
         ellips2.pose.orientation.x = 0;
         ellips2.pose.orientation.y = 0;
         ellips2.pose.orientation.z = 0;
