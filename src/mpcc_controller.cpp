@@ -447,7 +447,7 @@ void MPCC::runNode(const ros::TimerEvent &event)
 
             acado_feedbackStep();
 
-//            printf("\tReal-Time Iteration:  KKT Tolerance = %.3e\n\n", acado_getKKT());
+            printf("\tReal-Time Iteration:  KKT Tolerance = %.3e\n\n", acado_getKKT());
 			j++;    //        acado_printDifferentialVariables();
         }
 
@@ -468,7 +468,7 @@ void MPCC::runNode(const ros::TimerEvent &event)
 
 		if (publish_feedback_){publishFeedback(j,te_);}
 
-//		ROS_INFO_STREAM("Solve time " << te_ * 1e6 << " us");
+		ROS_INFO_STREAM("Solve time " << te_ * 1e6 << " us");
 
     // publish zero controlled velocity
         if (!tracking_)
