@@ -6,7 +6,7 @@ activate_output: true
 activate_debug_output: false
 activate_controller_node_output: true
 plotting_result: true
-publish_feedback: false
+publish_feedback: true
 
 # Clock frequency //hz
 clock_frequency: 20
@@ -16,7 +16,7 @@ state_dim: 3
 control_dim: 2
 
 #Inputs and output topics topic
-output_cmd: '/jackal_velocity_controller/cmd_vel'
+output_cmd: '/cmd_vel'   #'/jackal_velocity_controller/cmd_vel'
 robot_state_topic: '/robot_state'
 
 # Kinematic chain parameter
