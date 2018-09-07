@@ -341,9 +341,11 @@ void MPCC::runNode(const ros::TimerEvent &event)
 			    traj_i++;
                 //acadoVariables.x[3]-=ss[traj_i];
                 ROS_ERROR_STREAM("SWITCH SPLINE " << acadoVariables.x[3]);
-                ComputeCollisionFreeArea();
+//                ComputeCollisionFreeArea();
 		    }
         }
+
+        ComputeCollisionFreeArea();
 
 //        ROS_INFO_STREAM("traj_i: " << traj_i);
 //        ROS_INFO_STREAM("ss_length: " << ss.size());
@@ -624,58 +626,79 @@ void MPCC::ComputeCollisionFreeArea()
 
     ROS_INFO_STREAM("ss[traj_i] = " << ss[traj_i] << " ss[traj_i + 1] = " << ss[traj_i + 1] << " ss[traj_i + 2] = " << ss[traj_i + 2]);
 
-    for (int step_it = 0; step_it < search_steps; step_it++)
+    for (int N_it = 0; N_it < ACADO_N; N_it++)
     {
-//        theta_search = ss[traj_i] + step_it*(ss[traj_i] + ss[traj_i + 1])/search_steps;
-        theta_search = step_it*(ss[traj_i + 1] - ss[traj_i])/search_steps;
 
-//        ROS_INFO_STREAM("theta_search = " << theta_search);
-
-        x_path = (ref_path_x.m_a[traj_i]*(theta_search)*(theta_search)*(theta_search) + ref_path_x.m_b[traj_i]*(theta_search)*(theta_search) + ref_path_x.m_c[traj_i]*(theta_search) + ref_path_x.m_d[traj_i]);
-        y_path = (ref_path_y.m_a[traj_i]*(theta_search)*(theta_search)*(theta_search) + ref_path_y.m_b[traj_i]*(theta_search)*(theta_search) + ref_path_y.m_c[traj_i]*(theta_search) + ref_path_y.m_d[traj_i]);
+        x_path = acadoVariables.x[N_it * ACADO_NX + 0];
+        y_path = acadoVariables.x[N_it * ACADO_NX + 1];
 
         x_path_i = (int) round((x_path - environment_grid_.info.origin.position.x)/environment_grid_.info.resolution);
         y_path_i = (int) round((y_path - environment_grid_.info.origin.position.y)/environment_grid_.info.resolution);
 
-//        ROS_INFO_STREAM( "Segment " << traj_i << " : searching around: x = " << x_path << ", y = " << y_path << " at index [" << x_path_i << ", " << y_path_i << "]." );
-
         r = searchRadius(x_path_i,y_path_i);
-
-//        ROS_INFO_STREAM("Found r = " << r);
 
         if (r < collision_free_r1_)
         {
             collision_free_r1_ = r;
 //            ROS_INFO_STREAM("Minimum r = " << r);
         }
-
     }
+
+
+//    for (int step_it = 0; step_it < search_steps; step_it++)
+//    {
+////        theta_search = ss[traj_i] + step_it*(ss[traj_i] + ss[traj_i + 1])/search_steps;
+//        theta_search = step_it*(ss[traj_i + 1] - ss[traj_i])/search_steps;
+//
+////        ROS_INFO_STREAM("theta_search = " << theta_search);
+//
+////        x_path = (ref_path_x.m_a[traj_i]*(theta_search)*(theta_search)*(theta_search) + ref_path_x.m_b[traj_i]*(theta_search)*(theta_search) + ref_path_x.m_c[traj_i]*(theta_search) + ref_path_x.m_d[traj_i]);
+////        y_path = (ref_path_y.m_a[traj_i]*(theta_search)*(theta_search)*(theta_search) + ref_path_y.m_b[traj_i]*(theta_search)*(theta_search) + ref_path_y.m_c[traj_i]*(theta_search) + ref_path_y.m_d[traj_i]);
+//
+//
+//
+//        x_path_i = (int) round((x_path - environment_grid_.info.origin.position.x)/environment_grid_.info.resolution);
+//        y_path_i = (int) round((y_path - environment_grid_.info.origin.position.y)/environment_grid_.info.resolution);
+//
+////        ROS_INFO_STREAM( "Segment " << traj_i << " : searching around: x = " << x_path << ", y = " << y_path << " at index [" << x_path_i << ", " << y_path_i << "]." );
+//
+//        r = searchRadius(x_path_i,y_path_i);
+//
+////        ROS_INFO_STREAM("Found r = " << r);
+//
+//        if (r < collision_free_r1_)
+//        {
+//            collision_free_r1_ = r;
+////            ROS_INFO_STREAM("Minimum r = " << r);
+//        }
+//
+//    }
 
 //    ROS_INFO_STREAM("ss[traj_i + 1] = " << ss[traj_i + 1] << " ss[traj_i + 2] = " << ss[traj_i + 2]);
 
-    for (int step_it = 0; step_it < search_steps; step_it++)
-    {
-//        theta_search = ss[traj_i + 1] + step_it*(ss[traj_i + 1] + ss[traj_i + 2])/search_steps;
-        theta_search = step_it*(ss[traj_i + 2] - ss[traj_i + 1])/search_steps;
-
-//        ROS_INFO_STREAM("theta_search = " << theta_search);
-
-        x_path = (ref_path_x.m_a[traj_i + 1]*(theta_search)*(theta_search)*(theta_search) + ref_path_x.m_b[traj_i + 1]*(theta_search)*(theta_search) + ref_path_x.m_c[traj_i + 1]*(theta_search) + ref_path_x.m_d[traj_i + 1]);
-        y_path = (ref_path_y.m_a[traj_i + 1]*(theta_search)*(theta_search)*(theta_search) + ref_path_y.m_b[traj_i + 1]*(theta_search)*(theta_search) + ref_path_y.m_c[traj_i + 1]*(theta_search) + ref_path_y.m_d[traj_i + 1]);
-
-        x_path_i = (int) round((x_path - environment_grid_.info.origin.position.x)/environment_grid_.info.resolution);
-        y_path_i = (int) round((y_path - environment_grid_.info.origin.position.y)/environment_grid_.info.resolution);
-
-//        ROS_INFO_STREAM( "Segment " << (traj_i + 1) << " : searching around: x = " << x_path << ", y = " << y_path << " at index [" << x_path_i << ", " << y_path_i << "]." );
-
-        r = searchRadius(x_path_i,y_path_i);
-
-        if (r < collision_free_r2_)
-        {
-            collision_free_r2_ = r;
-//            ROS_INFO_STREAM("Found r = " << r);
-        }
-    }
+//    for (int step_it = 0; step_it < search_steps; step_it++)
+//    {
+////        theta_search = ss[traj_i + 1] + step_it*(ss[traj_i + 1] + ss[traj_i + 2])/search_steps;
+//        theta_search = step_it*(ss[traj_i + 2] - ss[traj_i + 1])/search_steps;
+//
+////        ROS_INFO_STREAM("theta_search = " << theta_search);
+//
+//        x_path = (ref_path_x.m_a[traj_i + 1]*(theta_search)*(theta_search)*(theta_search) + ref_path_x.m_b[traj_i + 1]*(theta_search)*(theta_search) + ref_path_x.m_c[traj_i + 1]*(theta_search) + ref_path_x.m_d[traj_i + 1]);
+//        y_path = (ref_path_y.m_a[traj_i + 1]*(theta_search)*(theta_search)*(theta_search) + ref_path_y.m_b[traj_i + 1]*(theta_search)*(theta_search) + ref_path_y.m_c[traj_i + 1]*(theta_search) + ref_path_y.m_d[traj_i + 1]);
+//
+//        x_path_i = (int) round((x_path - environment_grid_.info.origin.position.x)/environment_grid_.info.resolution);
+//        y_path_i = (int) round((y_path - environment_grid_.info.origin.position.y)/environment_grid_.info.resolution);
+//
+////        ROS_INFO_STREAM( "Segment " << (traj_i + 1) << " : searching around: x = " << x_path << ", y = " << y_path << " at index [" << x_path_i << ", " << y_path_i << "]." );
+//
+//        r = searchRadius(x_path_i,y_path_i);
+//
+//        if (r < collision_free_r2_)
+//        {
+//            collision_free_r2_ = r;
+////            ROS_INFO_STREAM("Found r = " << r);
+//        }
+//    }
 
 //    x_path = (ref_path_x.m_a[traj_i]*(acadoVariables.x[3]-ss[traj_i])*(acadoVariables.x[3]-ss[traj_i])*(acadoVariables.x[3]-ss[traj_i]) + ref_path_x.m_b[traj_i]*(acadoVariables.x[3]-ss[traj_i])*(acadoVariables.x[3]-ss[traj_i]) + ref_path_x.m_c[traj_i]*(acadoVariables.x[3]-ss[traj_i]) + ref_path_x.m_d[traj_i]);
 //    y_path = (ref_path_y.m_a[traj_i]*(acadoVariables.x[3]-ss[traj_i])*(acadoVariables.x[3]-ss[traj_i])*(acadoVariables.x[3]-ss[traj_i]) + ref_path_y.m_b[traj_i]*(acadoVariables.x[3]-ss[traj_i])*(acadoVariables.x[3]-ss[traj_i]) + ref_path_y.m_c[traj_i]*(acadoVariables.x[3]-ss[traj_i]) + ref_path_y.m_d[traj_i]);
@@ -1070,19 +1093,25 @@ void MPCC::publishPosConstraint(){
     for (int i = 0; i < ACADO_N; i++)
     {
 
-        if (acadoVariables.x[i * ACADO_NX + 3] > ss[traj_i + 1]){
-            ellips2.scale.x = collision_free_r2_*2.0;
-            ellips2.scale.y = collision_free_r2_*2.0;
-            ellips2.pose.position.x = (ref_path_x.m_a[traj_i + 1]*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i + 1])*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i + 1])*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i + 1]) + ref_path_x.m_b[traj_i + 1]*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i + 1])*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i + 1]) + ref_path_x.m_c[traj_i + 1]*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i + 1]) + ref_path_x.m_d[traj_i + 1]);
-            ellips2.pose.position.y = (ref_path_y.m_a[traj_i + 1]*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i + 1])*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i + 1])*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i + 1]) + ref_path_y.m_b[traj_i + 1]*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i + 1])*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i + 1]) + ref_path_y.m_c[traj_i + 1]*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i + 1]) + ref_path_y.m_d[traj_i + 1]);
-        }
-        else
-        {
-            ellips2.scale.x = collision_free_r1_*2.0;
-            ellips2.scale.y = collision_free_r1_*2.0;
-            ellips2.pose.position.x = (ref_path_x.m_a[traj_i]*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i])*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i])*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i]) + ref_path_x.m_b[traj_i]*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i])*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i]) + ref_path_x.m_c[traj_i]*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i]) + ref_path_x.m_d[traj_i]);
-            ellips2.pose.position.y = (ref_path_y.m_a[traj_i]*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i])*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i])*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i]) + ref_path_y.m_b[traj_i]*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i])*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i]) + ref_path_y.m_c[traj_i]*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i]) + ref_path_y.m_d[traj_i]);
-        }
+//        if (acadoVariables.x[i * ACADO_NX + 3] > ss[traj_i + 1]){
+//            ellips2.scale.x = collision_free_r2_*2.0;
+//            ellips2.scale.y = collision_free_r2_*2.0;
+//            ellips2.pose.position.x = (ref_path_x.m_a[traj_i + 1]*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i + 1])*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i + 1])*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i + 1]) + ref_path_x.m_b[traj_i + 1]*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i + 1])*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i + 1]) + ref_path_x.m_c[traj_i + 1]*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i + 1]) + ref_path_x.m_d[traj_i + 1]);
+//            ellips2.pose.position.y = (ref_path_y.m_a[traj_i + 1]*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i + 1])*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i + 1])*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i + 1]) + ref_path_y.m_b[traj_i + 1]*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i + 1])*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i + 1]) + ref_path_y.m_c[traj_i + 1]*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i + 1]) + ref_path_y.m_d[traj_i + 1]);
+//        }
+//        else
+//        {
+//            ellips2.scale.x = collision_free_r1_*2.0;
+//            ellips2.scale.y = collision_free_r1_*2.0;
+//            ellips2.pose.position.x = (ref_path_x.m_a[traj_i]*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i])*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i])*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i]) + ref_path_x.m_b[traj_i]*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i])*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i]) + ref_path_x.m_c[traj_i]*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i]) + ref_path_x.m_d[traj_i]);
+//            ellips2.pose.position.y = (ref_path_y.m_a[traj_i]*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i])*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i])*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i]) + ref_path_y.m_b[traj_i]*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i])*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i]) + ref_path_y.m_c[traj_i]*(acadoVariables.x[i * ACADO_NX + 3]-ss[traj_i]) + ref_path_y.m_d[traj_i]);
+//        }
+
+
+        ellips2.scale.x = collision_free_r1_*2.0;
+        ellips2.scale.y = collision_free_r1_*2.0;
+        ellips2.pose.position.x = acadoVariables.x[i * ACADO_NX + 0];
+        ellips2.pose.position.y = acadoVariables.x[i * ACADO_NX + 1];
 
         ellips2.id = 400+i;
         ellips2.pose.orientation.x = 0;

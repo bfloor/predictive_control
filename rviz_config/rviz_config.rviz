@@ -424,13 +424,13 @@ Visualization Manager:
       Unreliable: false
       Value: true
     - Class: rviz/MarkerArray
-      Enabled: false
+      Enabled: true
       Marker Topic: /collision_free_circles
       Name: MarkerArray
       Namespaces:
-        {}
+        trajectory: true
       Queue Size: 100
-      Value: false
+      Value: true
     - Class: rviz/MarkerArray
       Enabled: true
       Marker Topic: /visualize_ellipses_array
@@ -470,9 +470,9 @@ Visualization Manager:
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 2.22455
-        Y: 3.35938
-        Z: 13.1832
+        X: 2.27964
+        Y: 1.81797
+        Z: 4.03356
       Name: Current View
       Near Clip Distance: 0.01
       Pitch: 1.4448
