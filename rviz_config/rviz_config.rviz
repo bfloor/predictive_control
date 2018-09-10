@@ -87,81 +87,6 @@ Visualization Manager:
           Expand Link Details: false
           Expand Tree: false
           Link Tree Style: Links in Alphabetic Order
-          VLP16:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          VLP16_base_link:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          base_link:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-          baseplate_link:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          chassis_link:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          fenders_link:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          front_left_wheel_link:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          front_right_wheel_link:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          hokuyo_base_link:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          hokuyo_base_scan:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-          imu_link:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-          mid_mount:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-          navsat_link:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          rear_left_wheel_link:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          rear_mount:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-          rear_right_wheel_link:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
         Loop Animation: false
         Robot Alpha: 0.5
         Robot Color: 150; 50; 150
@@ -207,81 +132,6 @@ Visualization Manager:
           Expand Link Details: false
           Expand Tree: false
           Link Tree Style: Links in Alphabetic Order
-          VLP16:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          VLP16_base_link:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          base_link:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-          baseplate_link:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          chassis_link:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          fenders_link:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          front_left_wheel_link:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          front_right_wheel_link:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          hokuyo_base_link:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          hokuyo_base_scan:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-          imu_link:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-          mid_mount:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-          navsat_link:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          rear_left_wheel_link:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          rear_mount:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-          rear_right_wheel_link:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
         Robot Alpha: 1
         Show Robot Collision: false
         Show Robot Visual: true
@@ -436,7 +286,7 @@ Visualization Manager:
       Marker Topic: /visualize_ellipses_array
       Name: MarkerArray
       Namespaces:
-        "": true
+        {}
       Queue Size: 100
       Value: true
   Enabled: true

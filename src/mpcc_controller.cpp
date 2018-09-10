@@ -346,6 +346,15 @@ void MPCC::runNode(const ros::TimerEvent &event)
 		    else if (traj_i + 3 > ss.size()){
 		        goal_reached_ = true;
                 ROS_ERROR_STREAM("GOAL REACHED");
+                if (loop_mode_)
+                {
+                    traj_i = 0;
+                    goal_reached_ = false;
+                    last_poly_ = false;
+                    acadoVariables.x[3] = 0;
+                    ROS_ERROR_STREAM("LOOP STARTED");
+                }
+
             } else{
 			    traj_i++;
                 //acadoVariables.x[3]-=ss[traj_i];
