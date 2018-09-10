@@ -12,8 +12,8 @@ publish_feedback: true
 clock_frequency: 20
 
 #Optimal control problem dimensions
-state_dim: 3
-control_dim: 2
+state_dim: 6
+control_dim: 4
 
 #Inputs and output topics topic
 output_cmd: '/cmd_vel'   #'/jackal_velocity_controller/cmd_vel'
@@ -89,5 +89,5 @@ acado_config:
                 [1.0, 1.0]
            control_weight_factors:
                 # same as degree of freedom
-                [2.0, 0.1]
+                [1.5, 0.1]
 

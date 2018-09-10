@@ -218,7 +218,7 @@ public:
     double lag_error_;
 
 	//Spline trajectory generation
-	tk::spline ref_path_x, ref_path_y;
+	tk::spline ref_path_x, ref_path_y, collision_radii_;
 
 	//MPCC Implementation
 	std::vector<double> X_road, Y_road, Theta_road;
@@ -231,7 +231,10 @@ public:
     int n_search_points_;
     bool goal_reached_;
     bool last_poly_;
-    double collision_free_r_max_, collision_free_r1_, collision_free_r2_;
+    bool loop_mode_;
+    int occupied_;
+    double collision_free_r_max_, collision_free_r_min_;
+    std::vector<double> collision_free_R_, collision_free_X_, collision_free_Y_;
 
 private:
 
