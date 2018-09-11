@@ -102,7 +102,7 @@ bool MPCC::initialize()
         pred_traj_pub_ = nh.advertise<nav_msgs::Path>("predicted_trajectory",1);
 		spline_traj_pub_ = nh.advertise<nav_msgs::Path>("spline_traj",1);
 		spline_traj_pub2_ = nh.advertise<nav_msgs::Path>("reference_trajectory",1);
-		feedback_pub_ = nh.advertise<predictive_control::control_feedback>("controller_feedback",1);
+		feedback_pub_ = nh.advertise<predictive_control::controls_feedback>("controller_feedback",1);
         collision_free_pub_ = nh.advertise<visualization_msgs::MarkerArray>("collision_free_circles",1);
 
 		ros::Duration(1).sleep();
@@ -1070,7 +1070,7 @@ void MPCC::publishPosConstraint(){
 void MPCC::publishFeedback(int& it, double& time)
 {
 
-    predictive_control::control_feedback feedback_msg;
+    predictive_control::controls_feedback feedback_msg;
 
     feedback_msg.header.stamp = ros::Time::now();
     feedback_msg.header.frame_id = controller_config_->tracking_frame_;
