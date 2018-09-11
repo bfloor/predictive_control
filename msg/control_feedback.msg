@@ -1,6 +1,7 @@
 Header header
 
 float64 computation_time
+float64 freespace_time
 float64 cost
 float64 kkt
 int32 iterations
@@ -15,6 +16,11 @@ int32 search_points
 int32 enable_output
 
 float64 vRef
+
+float64 obstacle_distance1
+float64 obstacle_distance2
+
+obstacle_feed/Obstacles obstacles
 
 std_msgs/Float64MultiArray contour_errors
 

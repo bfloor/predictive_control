@@ -411,7 +411,7 @@ void MPCC::runNode(const ros::TimerEvent &event)
                 acadoVariables.od[(ACADO_NOD * N_iter) + 22] = 0;
                 acadoVariables.od[(ACADO_NOD * N_iter) + 23] = 0;
             }
-            else if (last_poly_) {
+            else if (last_poly_ && !loop_mode_) {
                 acadoVariables.od[(ACADO_NOD * N_iter) + 22] = reference_velocity_;
                 acadoVariables.od[(ACADO_NOD * N_iter) + 23] = 0;
             }
@@ -674,12 +674,12 @@ void MPCC::ComputeCollisionFreeArea()
 
     }
 
-    for (int i=0; i<ACADO_N; i++){
-        ROS_INFO_STREAM("circle_x: " << collision_free_X_[i] << " circle_y: " << collision_free_Y_[i] << " circle_r: " << collision_free_R_[i]);
-    }
+//    for (int i=0; i<ACADO_N; i++){
+//        ROS_INFO_STREAM("circle_x: " << collision_free_X_[i] << " circle_y: " << collision_free_Y_[i] << " circle_r: " << collision_free_R_[i]);
+//    }
 
-    te_ = acado_toc(&t);
-    ROS_INFO_STREAM("Free space solve time " << te_ * 1e6 << " us");
+    te_collison_free_ = acado_toc(&t);
+    ROS_INFO_STREAM("Free space solve time " << te_collison_free_ * 1e6 << " us");
 }
 
 double MPCC::searchRadius(int x_i, int y_i)
@@ -1078,6 +1078,7 @@ void MPCC::publishFeedback(int& it, double& time)
     feedback_msg.cost = cost_.data;
     feedback_msg.iterations = it;
     feedback_msg.computation_time = time;
+    feedback_msg.freespace_time = te_collison_free_;
     feedback_msg.kkt = acado_getKKT();
 
     feedback_msg.wC = cost_contour_weight_factors_(0);       // weight factor on contour error
@@ -1099,6 +1100,11 @@ void MPCC::publishFeedback(int& it, double& time)
     feedback_msg.enable_output = enable_output_;
 
     feedback_msg.vRef = reference_velocity_;
+
+    feedback_msg.obstacle_distance1 = sqrt(pow(pred_traj_.poses[0].pose.position.x - obstacles_.Obstacles[0].pose.position.x ,2) + pow(pred_traj_.poses[0].pose.position.y - obstacles_.Obstacles[0].pose.position.y,2));
+    feedback_msg.obstacle_distance2 = sqrt(pow(pred_traj_.poses[0].pose.position.x - obstacles_.Obstacles[1].pose.position.x ,2) + pow(pred_traj_.poses[0].pose.position.y - obstacles_.Obstacles[1].pose.position.y,2));
+
+    feedback_msg.obstacles = obstacles_;
 
     //Search window parameters
     feedback_msg.window = window_size_;

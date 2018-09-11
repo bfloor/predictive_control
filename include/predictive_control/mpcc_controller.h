@@ -210,7 +210,7 @@ public:
 	bool enable_output_;
 	int n_iterations_;
 	bool simulation_mode_;
-    real_t te_;
+    real_t te_, te_collison_free_;
 
 	tf2_ros::TransformBroadcaster state_pub_, path_pose_pub_;
 	std_msgs::Float64 cost_;
