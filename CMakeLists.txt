@@ -62,7 +62,7 @@ add_action_files(
 # Generate messages in the 'msg' folder
 add_message_files(
   FILES
-  controls_feedback.msg
+  control_feedback.msg
 )
 
 ## Generate services in the 'srv' folder

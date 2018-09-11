@@ -48,7 +48,7 @@
 
 // predicitve includes
 #include <predictive_control/predictive_configuration.h>
-#include <predictive_control/controls_feedback.h>
+#include <predictive_control/control_feedback.h>
 
 // actions, srvs, msgs
 #include <actionlib/server/simple_action_server.h>
