@@ -379,12 +379,28 @@ private:
 
     void ConstructRefPath();
 
+    /**
+     * @brief ComputeCollisionFreeArea: Compute the collision free are around the prediction horizon, approximated by circles located at each discretization step
+     */
     void ComputeCollisionFreeArea();
 
+    /**
+     * @brief searchRadius: Find the true radius from an occupancy grid index to the first occupied cell
+     * @param x_i: Index of grid cell in x direction
+     * @param y_i: Index of grid cell in y direction
+     */
     double searchRadius(int x_i, int y_i);
 
+    /**
+     * @brief getOccupancy: Returns the occupancy cell value at specified index
+     * @param x_i: Index of grid cell in x direction
+     * @param y_i: Index of grid cell in y direction
+     */
     int getOccupancy(int x_i, int y_i);
 
+    /**
+     * @brief publishPosConstraint: Publish the approximated collision free area as a markerarray
+     */
     void publishPosConstraint();
 
     void publishFeedback(int& it, double& time);

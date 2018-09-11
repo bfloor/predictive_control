@@ -642,7 +642,7 @@ void MPCC::ComputeCollisionFreeArea()
 
     collision_free_r_min_ = collision_free_r_max_;
 
-    ROS_INFO_STREAM("ss[traj_i] = " << ss[traj_i] << " ss[traj_i + 1] = " << ss[traj_i + 1] << " ss[traj_i + 2] = " << ss[traj_i + 2]);
+//    ROS_INFO_STREAM("ss[traj_i] = " << ss[traj_i] << " ss[traj_i + 1] = " << ss[traj_i + 1] << " ss[traj_i + 2] = " << ss[traj_i + 2]);
 
     // Iterate over points in prediction horizon to search for collision free circles
     for (int N_it = 0; N_it < ACADO_N; N_it++)
