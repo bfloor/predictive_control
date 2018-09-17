@@ -1105,13 +1105,13 @@ void MPCC::publishFeedback(int& it, double& time)
     feedback_msg.obstacle_distance2 = sqrt(pow(pred_traj_.poses[0].pose.position.x - obstacles_.Obstacles[1].pose.position.x ,2) + pow(pred_traj_.poses[0].pose.position.y - obstacles_.Obstacles[1].pose.position.y,2));
 
     feedback_msg.obstx_0 = obstacles_.Obstacles[0].pose.position.x;
-    feedback_msg.obsty_0 = obstacles_.Obstacles[0].pose.position.x;
+    feedback_msg.obsty_0 = obstacles_.Obstacles[0].pose.position.y;
     feedback_msg.obsth_0 = obstacles_.Obstacles[0].pose.orientation.z;
     feedback_msg.obsta_0 = obstacles_.Obstacles[0].major_semiaxis;
     feedback_msg.obstb_0 = obstacles_.Obstacles[0].minor_semiaxis;
 
     feedback_msg.obstx_1 = obstacles_.Obstacles[1].pose.position.x;
-    feedback_msg.obsty_1 = obstacles_.Obstacles[1].pose.position.x;
+    feedback_msg.obsty_1 = obstacles_.Obstacles[1].pose.position.y;
     feedback_msg.obsth_1 = obstacles_.Obstacles[1].pose.orientation.z;
     feedback_msg.obsta_1 = obstacles_.Obstacles[1].major_semiaxis;
     feedback_msg.obstb_1 = obstacles_.Obstacles[1].minor_semiaxis;
