@@ -84,8 +84,7 @@ public:
   std::vector<double> ref_theta_;
 
   // Numbers of points for spline and clothoid fitting
-  int n_points_clothoid_;
-  int n_points_spline_;
+  int n_poly_per_clothoid_;
 
   double slack_weight_;
   double repulsive_weight_;

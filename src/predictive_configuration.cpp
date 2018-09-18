@@ -84,15 +84,9 @@ bool predictive_configuration::initialize() //const std::string& node_handle_nam
     return false;
   }
 
-  if (!nh_config.getParam ("global_path/n_points_clothoid", n_points_clothoid_) )
+  if (!nh_config.getParam ("global_path/n_poly_per_clothoid", n_poly_per_clothoid_) )
   {
-    ROS_WARN(" Parameter '/global_path/n_points_clothoid not set on %s node" , ros::this_node::getName().c_str());
-    return false;
-  }
-
-  if (!nh_config.getParam ("global_path/n_points_spline", n_points_spline_) )
-  {
-    ROS_WARN(" Parameter '/global_path/n_points_spline not set on %s node" , ros::this_node::getName().c_str());
+    ROS_WARN(" Parameter '/global_path/n_poly_per_clothoid not set on %s node" , ros::this_node::getName().c_str());
     return false;
   }
 

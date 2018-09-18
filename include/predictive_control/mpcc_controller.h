@@ -225,7 +225,7 @@ public:
     double dist_spline_pts_;
     double total_length_;
     std::vector<double> ss,xx,yy;
-    int n_clothoid,n_pts;
+    int n_clothoid,n_pts, N_local, n_traj_per_cloth;
     //Search window parameters
     double window_size_;
     int n_search_points_;
