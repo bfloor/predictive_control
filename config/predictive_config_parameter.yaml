@@ -32,9 +32,9 @@ reference_velocity: 0.5
 # Parameters for predefined reference path
 ## Test path for two_walls environment ##
 #global_path:
-#      x: [0, 6, 8, 8]
-#      y: [0, 0, -2, -10]
-#      theta: [0, 0, -1.5708, -1.5708]
+#      x: [0, 2, 4, 6, 8, 8]
+#      y: [0, 0, 0, 0, -2, -10]
+#      theta: [0, 0, 0, 0, -1.5708, -1.5708]
 #      n_points_clothoid: 10
 #      n_points_spline: 10
 
@@ -53,6 +53,14 @@ global_path:
       theta: [0, 1.5708, 0, -1.5708, 3.1416, 1.5708, 3.1416, -1.5708, 0]
       n_points_clothoid: 20
       n_points_spline: 20
+
+
+#global_path:
+#      x: [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20]
+#      y: [0, 0, 0, 0, 0, 0,  0,  0,  0,  0,  0 ]
+#      theta: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+#      n_points_clothoid: 20
+#      n_points_spline: 20
 
 #global_path:
 #      x: [-2, 0, 1, -1, 0, 1.5]

@@ -232,6 +232,31 @@ bool MPCC::initialize()
 	}
 }
 
+void MPCC::reconfigureCallback(predictive_control::PredictiveControllerConfig& config, uint32_t level){
+
+    ROS_INFO("reconfigure callback!");
+    cost_contour_weight_factors_(0) = config.Wcontour;
+    cost_contour_weight_factors_(1) = config.Wlag;
+    cost_control_weight_factors_(0) = config.Kv;
+    cost_control_weight_factors_(1) = config.Kw;
+
+    slack_weight_= config.Ws;
+    repulsive_weight_ = config.WR;
+
+    reference_velocity_ = config.vRef;
+    collision_free_r_max_ = config.rMax;
+    occupied_ = config.occThres;
+
+    enable_output_ = config.enable_output;
+    loop_mode_ = config.loop_mode;
+    n_iterations_ = config.n_iterations;
+    simulation_mode_ = config.simulation_mode;
+
+    //Search window parameters
+    window_size_ = config.window_size;
+    n_search_points_ = config.n_search_points;
+}
+
 void MPCC::computeEgoDiscs()
 {
     // Collect parameters for disc representation
@@ -328,22 +353,14 @@ void MPCC::runNode(const ros::TimerEvent &event)
         acadoVariables.x[1] = current_state_(1);
         acadoVariables.x[2] = current_state_(2);
         acadoVariables.x[4] = 0.0000001;          //dummy state
-        acadoVariables.x[5] = 0.0000001;          //dummy state
 
         acadoVariables.u[0] = controlled_velocity_.linear.x;
         acadoVariables.u[1] = controlled_velocity_.angular.z;
         acadoVariables.u[2] = 0.0000001;           //slack variable
-        acadoVariables.u[3] = 0.0000001;           //slack variable
 
-		if(acadoVariables.x[3] > ss[traj_i+1]) {
+		if(acadoVariables.x[3] > ss[traj_i%2 + 1]) {
 
-		    if (traj_i + 3 == ss.size()){
-                last_poly_ = true;
-                traj_i++;
-                ROS_ERROR_STREAM("LAST POLYNOMIAL");
-                ROS_ERROR_STREAM("SWITCH SPLINE " << acadoVariables.x[3]);
-		    }
-		    else if (traj_i + 3 > ss.size()){
+		    if (traj_i + 3 > 20){
 		        goal_reached_ = true;
                 ROS_ERROR_STREAM("GOAL REACHED");
                 if (loop_mode_)
@@ -354,23 +371,20 @@ void MPCC::runNode(const ros::TimerEvent &event)
                     acadoVariables.x[3] = 0;
                     ROS_ERROR_STREAM("LOOP STARTED");
                 }
-
             } else{
 			    traj_i++;
-                //acadoVariables.x[3]-=ss[traj_i];
+                ConstructLocalRefPath();
+                acadoVariables.x[3] = ss[traj_i%2];
                 ROS_ERROR_STREAM("SWITCH SPLINE " << acadoVariables.x[3]);
-//                ComputeCollisionFreeArea();
 		    }
         }
-
-        ComputeCollisionFreeArea();
 
 //        ROS_INFO_STREAM("traj_i: " << traj_i);
 //        ROS_INFO_STREAM("ss_length: " << ss.size());
 
         if(idx ==1) {
             double smin;
-            smin = spline_closest_point(ss[traj_i], 100, acadoVariables.x[3], window_size_, n_search_points_);
+            smin = spline_closest_point(ss[traj_i%2], 100, acadoVariables.x[3], window_size_, n_search_points_);
             acadoVariables.x[3] = smin;
 //            ROS_ERROR_STREAM("smin: " << smin);
         }
@@ -381,66 +395,107 @@ void MPCC::runNode(const ros::TimerEvent &event)
         for (N_iter = 0; N_iter < ACADO_N; N_iter++) {
 
             // Initialize Online Data variables
-            acadoVariables.od[(ACADO_NOD * N_iter) + 0] = ref_path_x.m_a[traj_i];        // spline coefficients
-            acadoVariables.od[(ACADO_NOD * N_iter) + 1] = ref_path_x.m_b[traj_i];
-            acadoVariables.od[(ACADO_NOD * N_iter) + 2] = ref_path_x.m_c[traj_i];        // spline coefficients
-            acadoVariables.od[(ACADO_NOD * N_iter) + 3] = ref_path_x.m_d[traj_i];
-            acadoVariables.od[(ACADO_NOD * N_iter) + 4] = ref_path_y.m_a[traj_i];        // spline coefficients
-            acadoVariables.od[(ACADO_NOD * N_iter) + 5] = ref_path_y.m_b[traj_i];
-            acadoVariables.od[(ACADO_NOD * N_iter) + 6] = ref_path_y.m_c[traj_i];        // spline coefficients
-            acadoVariables.od[(ACADO_NOD * N_iter) + 7] = ref_path_y.m_d[traj_i];
+            acadoVariables.od[(ACADO_NOD * N_iter) + 0] = ref_path_x.m_a[traj_i%3 + 0];        // spline coefficients
+            acadoVariables.od[(ACADO_NOD * N_iter) + 1] = ref_path_x.m_b[traj_i%3 + 0];
+            acadoVariables.od[(ACADO_NOD * N_iter) + 2] = ref_path_x.m_c[traj_i%3 + 0];        // spline coefficients
+            acadoVariables.od[(ACADO_NOD * N_iter) + 3] = ref_path_x.m_d[traj_i%3 + 0];
+            acadoVariables.od[(ACADO_NOD * N_iter) + 4] = ref_path_y.m_a[traj_i%3 + 0];        // spline coefficients
+            acadoVariables.od[(ACADO_NOD * N_iter) + 5] = ref_path_y.m_b[traj_i%3 + 0];
+            acadoVariables.od[(ACADO_NOD * N_iter) + 6] = ref_path_y.m_c[traj_i%3 + 0];        // spline coefficients
+            acadoVariables.od[(ACADO_NOD * N_iter) + 7] = ref_path_y.m_d[traj_i%3 + 0];
 
-            acadoVariables.od[(ACADO_NOD * N_iter) + 8] = ref_path_x.m_a[traj_i + 1];         // spline coefficients
-            acadoVariables.od[(ACADO_NOD * N_iter) + 9] = ref_path_x.m_b[traj_i + 1];
-            acadoVariables.od[(ACADO_NOD * N_iter) + 10] = ref_path_x.m_c[traj_i + 1];        // spline coefficients
-            acadoVariables.od[(ACADO_NOD * N_iter) + 11] = ref_path_x.m_d[traj_i + 1];
-            acadoVariables.od[(ACADO_NOD * N_iter) + 12] = ref_path_y.m_a[traj_i + 1];        // spline coefficients
-            acadoVariables.od[(ACADO_NOD * N_iter) + 13] = ref_path_y.m_b[traj_i + 1];
-            acadoVariables.od[(ACADO_NOD * N_iter) + 14] = ref_path_y.m_c[traj_i + 1];        // spline coefficients
-            acadoVariables.od[(ACADO_NOD * N_iter) + 15] = ref_path_y.m_d[traj_i + 1];
+            acadoVariables.od[(ACADO_NOD * N_iter) + 8] = ref_path_x.m_a[traj_i%3 + 1];         // spline coefficients
+            acadoVariables.od[(ACADO_NOD * N_iter) + 9] = ref_path_x.m_b[traj_i%3 + 1];
+            acadoVariables.od[(ACADO_NOD * N_iter) + 10] = ref_path_x.m_c[traj_i%3 + 1];        // spline coefficients
+            acadoVariables.od[(ACADO_NOD * N_iter) + 11] = ref_path_x.m_d[traj_i%3 + 1];
+            acadoVariables.od[(ACADO_NOD * N_iter) + 12] = ref_path_y.m_a[traj_i%3 + 1];        // spline coefficients
+            acadoVariables.od[(ACADO_NOD * N_iter) + 13] = ref_path_y.m_b[traj_i%3 + 1];
+            acadoVariables.od[(ACADO_NOD * N_iter) + 14] = ref_path_y.m_c[traj_i%3 + 1];        // spline coefficients
+            acadoVariables.od[(ACADO_NOD * N_iter) + 15] = ref_path_y.m_d[traj_i%3 + 1];
 
-			acadoVariables.od[(ACADO_NOD * N_iter) + 16] = cost_contour_weight_factors_(0);       // weight factor on contour error
-			acadoVariables.od[(ACADO_NOD * N_iter) + 17] = cost_contour_weight_factors_(1);       // weight factor on lag error
-			acadoVariables.od[(ACADO_NOD * N_iter) + 18 ] = cost_control_weight_factors_(0);      // weight factor on theta
-			acadoVariables.od[(ACADO_NOD * N_iter) + 19 ] = cost_control_weight_factors_(1);      // weight factor on v
+            acadoVariables.od[(ACADO_NOD * N_iter) + 16] = ref_path_x.m_a[traj_i%3 + 2];         // spline coefficients
+            acadoVariables.od[(ACADO_NOD * N_iter) + 17] = ref_path_x.m_b[traj_i%3 + 2];
+            acadoVariables.od[(ACADO_NOD * N_iter) + 18] = ref_path_x.m_c[traj_i%3 + 2];        // spline coefficients
+            acadoVariables.od[(ACADO_NOD * N_iter) + 19] = ref_path_x.m_d[traj_i%3 + 2];
+            acadoVariables.od[(ACADO_NOD * N_iter) + 20] = ref_path_y.m_a[traj_i%3 + 2];        // spline coefficients
+            acadoVariables.od[(ACADO_NOD * N_iter) + 21] = ref_path_y.m_b[traj_i%3 + 2];
+            acadoVariables.od[(ACADO_NOD * N_iter) + 22] = ref_path_y.m_c[traj_i%3 + 2];        // spline coefficients
+            acadoVariables.od[(ACADO_NOD * N_iter) + 23] = ref_path_y.m_d[traj_i%3 + 2];
 
-            acadoVariables.od[(ACADO_NOD * N_iter) + 20 ] = ss[traj_i];
-            acadoVariables.od[(ACADO_NOD * N_iter) + 21 ] = ss[traj_i + 1];
+//            // Initialize Online Data variables
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 0] = ref_path_x.m_a[0];        // spline coefficients
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 1] = ref_path_x.m_b[0];
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 2] = ref_path_x.m_c[0];        // spline coefficients
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 3] = ref_path_x.m_d[0];
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 4] = ref_path_y.m_a[0];        // spline coefficients
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 5] = ref_path_y.m_b[0];
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 6] = ref_path_y.m_c[0];        // spline coefficients
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 7] = ref_path_y.m_d[0];
+//
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 8] = ref_path_x.m_a[1];         // spline coefficients
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 9] = ref_path_x.m_b[1];
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 10] = ref_path_x.m_c[1];        // spline coefficients
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 11] = ref_path_x.m_d[1];
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 12] = ref_path_y.m_a[1];        // spline coefficients
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 13] = ref_path_y.m_b[1];
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 14] = ref_path_y.m_c[1];        // spline coefficients
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 15] = ref_path_y.m_d[1];
+//
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 16] = ref_path_x.m_a[2];         // spline coefficients
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 17] = ref_path_x.m_b[2];
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 18] = ref_path_x.m_c[2];        // spline coefficients
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 19] = ref_path_x.m_d[2];
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 20] = ref_path_y.m_a[2];        // spline coefficients
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 21] = ref_path_y.m_b[2];
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 22] = ref_path_y.m_c[2];        // spline coefficients
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 23] = ref_path_y.m_d[2];
+
+			acadoVariables.od[(ACADO_NOD * N_iter) + 24] = cost_contour_weight_factors_(0);       // weight factor on contour error
+			acadoVariables.od[(ACADO_NOD * N_iter) + 25] = cost_contour_weight_factors_(1);       // weight factor on lag error
+			acadoVariables.od[(ACADO_NOD * N_iter) + 26] = cost_control_weight_factors_(0);      // weight factor on theta
+			acadoVariables.od[(ACADO_NOD * N_iter) + 27] = cost_control_weight_factors_(1);      // weight factor on v
+
+            acadoVariables.od[(ACADO_NOD * N_iter) + 28 ] = ss[traj_i%3 + 0];
+            acadoVariables.od[(ACADO_NOD * N_iter) + 29 ] = ss[traj_i%3 + 1];
+            acadoVariables.od[(ACADO_NOD * N_iter) + 30 ] = ss[traj_i%3 + 2];
+
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 28 ] = ss[3%traj_i + 0];
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 29 ] = ss[3%traj_i + 1];
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 30 ] = ss[3%traj_i + 2];
 
             if (goal_reached_){
-                acadoVariables.od[(ACADO_NOD * N_iter) + 22] = 0;
-                acadoVariables.od[(ACADO_NOD * N_iter) + 23] = 0;
+                acadoVariables.od[(ACADO_NOD * N_iter) + 31] = 0;
+                acadoVariables.od[(ACADO_NOD * N_iter) + 32] = 0;
+                acadoVariables.od[(ACADO_NOD * N_iter) + 33] = 0;
             }
             else if (last_poly_ && !loop_mode_) {
-                acadoVariables.od[(ACADO_NOD * N_iter) + 22] = reference_velocity_;
-                acadoVariables.od[(ACADO_NOD * N_iter) + 23] = 0;
+                acadoVariables.od[(ACADO_NOD * N_iter) + 31] = reference_velocity_;
+                acadoVariables.od[(ACADO_NOD * N_iter) + 32] = 0;
+                acadoVariables.od[(ACADO_NOD * N_iter) + 33] = 0;
             }
             else {
-                acadoVariables.od[(ACADO_NOD * N_iter) + 22] = reference_velocity_;
-                acadoVariables.od[(ACADO_NOD * N_iter) + 23] = reference_velocity_;
+                acadoVariables.od[(ACADO_NOD * N_iter) + 31] = reference_velocity_;
+                acadoVariables.od[(ACADO_NOD * N_iter) + 32] = reference_velocity_;
+                acadoVariables.od[(ACADO_NOD * N_iter) + 33] = reference_velocity_;
             }
 
-			acadoVariables.od[(ACADO_NOD * N_iter) + 24] = ss[traj_i + 1] + 0.02;
+			acadoVariables.od[(ACADO_NOD * N_iter) + 34] = ss[traj_i%3 + 1] + 0.02;
+            acadoVariables.od[(ACADO_NOD * N_iter) + 35] = ss[traj_i%3 + 2] + 0.02;
 
-            acadoVariables.od[(ACADO_NOD * N_iter) + 25] = slack_weight_;        // weight on the slack variable
-            acadoVariables.od[(ACADO_NOD * N_iter) + 26] = repulsive_weight_;    // weight on the repulsive cost
+            acadoVariables.od[(ACADO_NOD * N_iter) + 36] = slack_weight_;        // weight on the slack variable
+            acadoVariables.od[(ACADO_NOD * N_iter) + 37] = repulsive_weight_;    // weight on the repulsive cost
 
-            acadoVariables.od[(ACADO_NOD * N_iter) + 29] = obstacles_.Obstacles[0].pose.position.x;      // x position of obstacle 1
-            acadoVariables.od[(ACADO_NOD * N_iter) + 30] = obstacles_.Obstacles[0].pose.position.y;      // y position of obstacle 1
-            acadoVariables.od[(ACADO_NOD * N_iter) + 31] = obstacles_.Obstacles[0].pose.orientation.z;   // heading of obstacle 1
-            acadoVariables.od[(ACADO_NOD * N_iter) + 32] = obstacles_.Obstacles[0].major_semiaxis;       // major semiaxis of obstacle 1
-            acadoVariables.od[(ACADO_NOD * N_iter) + 33] = obstacles_.Obstacles[0].minor_semiaxis;       // minor semiaxis of obstacle 1
+            acadoVariables.od[(ACADO_NOD * N_iter) + 40] = obstacles_.Obstacles[0].pose.position.x;      // x position of obstacle 1
+            acadoVariables.od[(ACADO_NOD * N_iter) + 41] = obstacles_.Obstacles[0].pose.position.y;      // y position of obstacle 1
+            acadoVariables.od[(ACADO_NOD * N_iter) + 42] = obstacles_.Obstacles[0].pose.orientation.z;   // heading of obstacle 1
+            acadoVariables.od[(ACADO_NOD * N_iter) + 43] = obstacles_.Obstacles[0].major_semiaxis;       // major semiaxis of obstacle 1
+            acadoVariables.od[(ACADO_NOD * N_iter) + 44] = obstacles_.Obstacles[0].minor_semiaxis;       // minor semiaxis of obstacle 1
 
-            acadoVariables.od[(ACADO_NOD * N_iter) + 34] = obstacles_.Obstacles[1].pose.position.x;      // x position of obstacle 2
-            acadoVariables.od[(ACADO_NOD * N_iter) + 35] = obstacles_.Obstacles[1].pose.position.y;      // y position of obstacle 2
-            acadoVariables.od[(ACADO_NOD * N_iter) + 36] = obstacles_.Obstacles[1].pose.orientation.z;   // heading of obstacle 2
-            acadoVariables.od[(ACADO_NOD * N_iter) + 37] = obstacles_.Obstacles[1].major_semiaxis;       // major semiaxis of obstacle 2
-            acadoVariables.od[(ACADO_NOD * N_iter) + 38] = obstacles_.Obstacles[1].minor_semiaxis;       // minor semiaxis of obstacle 2
-
-            // Set radii for collision free circles on static environment
-            acadoVariables.od[(ACADO_NOD * N_iter) + 39] = collision_free_R_[N_iter];
-            acadoVariables.od[(ACADO_NOD * N_iter) + 40] = collision_free_X_[N_iter];
-            acadoVariables.od[(ACADO_NOD * N_iter) + 41] = collision_free_Y_[N_iter];
+            acadoVariables.od[(ACADO_NOD * N_iter) + 45] = obstacles_.Obstacles[1].pose.position.x;      // x position of obstacle 2
+            acadoVariables.od[(ACADO_NOD * N_iter) + 46] = obstacles_.Obstacles[1].pose.position.y;      // y position of obstacle 2
+            acadoVariables.od[(ACADO_NOD * N_iter) + 47] = obstacles_.Obstacles[1].pose.orientation.z;   // heading of obstacle 2
+            acadoVariables.od[(ACADO_NOD * N_iter) + 48] = obstacles_.Obstacles[1].major_semiaxis;       // major semiaxis of obstacle 2
+            acadoVariables.od[(ACADO_NOD * N_iter) + 49] = obstacles_.Obstacles[1].minor_semiaxis;       // minor semiaxis of obstacle 2
     }
 
         acadoVariables.x0[ 0 ] = current_state_(0);
@@ -448,16 +503,16 @@ void MPCC::runNode(const ros::TimerEvent &event)
         acadoVariables.x0[ 2 ] = current_state_(2);
 		acadoVariables.x0[ 3 ] = acadoVariables.x[3];
         acadoVariables.x0[ 4 ] = 0.0000001;             //dummy state
-        acadoVariables.x0[ 5 ] = 0.0000001;             //dummy state
 
-//        ROS_INFO_STREAM("ss[traj_i]: " << ss[traj_i]);
-//        ROS_INFO_STREAM("acadoVariables.x[3]: " << acadoVariables.x[3]);
+        ROS_INFO_STREAM("ss[traj_i%2]: " << ss[traj_i%2]);
+        ROS_INFO_STREAM("ss[traj_i%2 + 1]: " << ss[traj_i%2 + 1]);
+        ROS_INFO_STREAM("acadoVariables.x[3]: " << acadoVariables.x[3]);
 
         acado_preparationStep();
 
         acado_feedbackStep();
 
-        printf("\tReal-Time Iteration:  KKT Tolerance = %.3e\n\n", acado_getKKT());
+//        printf("\tReal-Time Iteration:  KKT Tolerance = %.3e\n\n", acado_getKKT());
 
 		int j=1;
         while (acado_getKKT()> 1e-3 && j<n_iterations_){ //  && acado_getKKT() < 100
@@ -466,7 +521,7 @@ void MPCC::runNode(const ros::TimerEvent &event)
 
             acado_feedbackStep();
 
-            printf("\tReal-Time Iteration:  KKT Tolerance = %.3e\n\n", acado_getKKT());
+//            printf("\tReal-Time Iteration:  KKT Tolerance = %.3e\n\n", acado_getKKT());
 			j++;    //        acado_printDifferentialVariables();
         }
 
@@ -477,7 +532,6 @@ void MPCC::runNode(const ros::TimerEvent &event)
 
         publishPredictedTrajectory();
 		publishPredictedCollisionSpace();
-        publishPosConstraint();
 		publishPredictedOutput();
 		publishAnaliticSplineTrajectory();
 		broadcastPathPose();
@@ -485,9 +539,7 @@ void MPCC::runNode(const ros::TimerEvent &event)
 		cost_.data = acado_getObjective();
 		publishCost();
 
-		if (publish_feedback_){publishFeedback(j,te_);}
-
-		ROS_INFO_STREAM("Solve time " << te_ * 1e6 << " us");
+//		ROS_INFO_STREAM("Solve time " << te_ * 1e6 << " us");
 
     // publish zero controlled velocity
         if (!tracking_)
@@ -529,10 +581,6 @@ double MPCC::spline_closest_point(double s_min, double s_max, double s_guess, do
 			smin = s_i;
 		}
 
-		//		ROS_INFO_STREAM("s_i: " << s_i << " " << "spline_pos_x_i: " << spline_pos_x_i << " " << "spline_pos_y_i: " << spline_pos_y_i << " " << "dist_i: " << dist_i << " ");
-
-        // QUAINT ERROR IN INDIGO. IF NOT PAUSED, WEIRD SOLUTIONS ARE RETURNED
-//	    ros::Duration(0.000000001).sleep();
         ros::Duration(1E-20).sleep();
 	}
     if(smin < lower){
@@ -630,148 +678,197 @@ void MPCC::ConstructRefPath(){
     Ref_path(X_road, Y_road, Theta_road);
 }
 
-void MPCC::ComputeCollisionFreeArea()
-{
-    acado_timer t;
-    acado_tic( &t );
+void MPCC::ConstructLocalRefPath(){
 
-    int x_path_i, y_path_i;
-    double x_path, y_path, theta_search, r;
+    // Number of segments in the local reference path
+    int N_local = 3;
 
-    int search_steps = 10;
+    // Number of segments in each clothoid fitted through the global points
+    int n_traj_per_cloth = 2;
 
-    collision_free_r_min_ = collision_free_r_max_;
+    // Compute how many clothoid points should be build for the local reference path
+    int N_cloth = N_local;
+    n_clothoid = N_cloth + 1;
 
-//    ROS_INFO_STREAM("ss[traj_i] = " << ss[traj_i] << " ss[traj_i + 1] = " << ss[traj_i + 1] << " ss[traj_i + 2] = " << ss[traj_i + 2]);
+    ROS_INFO_STREAM("N_cloth: "<< N_cloth);
+    ROS_INFO_STREAM("n_clothoid: "<< n_clothoid);
 
-    // Iterate over points in prediction horizon to search for collision free circles
-    for (int N_it = 0; N_it < ACADO_N; N_it++)
+    // Initialize vectors containing the global path
+    X_road.resize(n_clothoid);
+    Y_road.resize(n_clothoid);
+    Theta_road.resize(n_clothoid);
+
+    // Based on counter of segments, compute clothoid index
+    cloth_i = floor(((double)traj_i)/((double)n_traj_per_cloth));
+    ROS_INFO_STREAM("cloth_i: "<< cloth_i);
+    ROS_INFO_STREAM("traj_i: "<< traj_i);
+
+    for (int ref_point_it = cloth_i; ref_point_it < cloth_i + n_clothoid; ref_point_it++)
     {
+        X_road[ref_point_it - cloth_i] = controller_config_->ref_x_.at(ref_point_it);
+        Y_road[ref_point_it - cloth_i] = controller_config_->ref_y_.at(ref_point_it);
+        Theta_road[ref_point_it - cloth_i] = controller_config_->ref_theta_.at(ref_point_it);
+    }
 
-        // Current search point of prediction horizon
-        x_path = acadoVariables.x[N_it * ACADO_NX + 0];
-        y_path = acadoVariables.x[N_it * ACADO_NX + 1];
+    // Number of points defining the spline
+    n_pts = N_cloth*n_traj_per_cloth + 1;
+    ROS_INFO_STREAM("n_pts: "<< n_pts);
 
-        // Find corresponding index of the point in the occupancy grid map
-        x_path_i = (int) round((x_path - environment_grid_.info.origin.position.x)/environment_grid_.info.resolution);
-        y_path_i = (int) round((y_path - environment_grid_.info.origin.position.y)/environment_grid_.info.resolution);
+    // Initialize variables to generate clothoid local reference path
+    double k, dk, L;
 
-        // Compute radius to closest occupied grid cell
-        r = searchRadius(x_path_i,y_path_i);
+    std::vector<double> X, Y;
+    std::vector<double> X_all(n_pts), Y_all(n_pts), S_all(n_pts);
+    total_length_= 0;
 
-        // Assign center and radius of collision free circle to vector of the whole prediction horizon
-        collision_free_R_[N_it] = r;
-        collision_free_X_[N_it] = x_path;
-        collision_free_Y_[N_it] = y_path;
+    total_length_ = 0;
 
-        // Keep track of the minimum collision free radius in the current prediction horizon
-        if (r < collision_free_r_min_)
-        {
-            collision_free_r_min_ = r;
-//            ROS_INFO_STREAM("Minimum r = " << r);
+    ROS_INFO_STREAM("X_road size: " << X_road.size());
+
+    for (int clothoid_it = 0; clothoid_it < X_road.size() - 1; clothoid_it++){
+        Clothoid::buildClothoid(X_road[clothoid_it], Y_road[clothoid_it], Theta_road[clothoid_it], X_road[clothoid_it+1], Y_road[clothoid_it+1], Theta_road[clothoid_it+1], k, dk, L);
+
+        Clothoid::pointsOnClothoid(X_road[clothoid_it], Y_road[clothoid_it], Theta_road[clothoid_it], k, dk, L, n_traj_per_cloth + 1, X, Y);
+
+        ROS_INFO_STREAM("clothoid_it: " << clothoid_it);
+
+        for (int clothoid_points_it = 0; clothoid_points_it < n_traj_per_cloth; clothoid_points_it++){
+            ROS_INFO_STREAM("X: " << X[clothoid_points_it]);
+            ROS_INFO_STREAM("Y: " << Y[clothoid_points_it]);
+
+            X_all[clothoid_it*n_traj_per_cloth + clothoid_points_it] = X[clothoid_points_it];
+            Y_all[clothoid_it*n_traj_per_cloth + clothoid_points_it] = Y[clothoid_points_it];
+            S_all[clothoid_it*n_traj_per_cloth + clothoid_points_it] = total_length_ + (clothoid_points_it)*L/n_traj_per_cloth;
         }
 
+        total_length_ += L;
+    }
+
+    X_all[n_pts - 1] = X_road[X_road.size() - 1];
+    Y_all[n_pts - 1] = Y_road[X_road.size() - 1];
+    S_all[n_pts - 1] = total_length_;
+
+    for (int clothoid_points_it = 0; clothoid_points_it < X_all.size(); clothoid_points_it++){
+        ROS_INFO_STREAM("X_all: " << X_all[clothoid_points_it]);
+        ROS_INFO_STREAM("Y_all: " << Y_all[clothoid_points_it]);
+        ROS_INFO_STREAM("S_all: " << S_all[clothoid_points_it]);
 
     }
 
-//    for (int i=0; i<ACADO_N; i++){
-//        ROS_INFO_STREAM("circle_x: " << collision_free_X_[i] << " circle_y: " << collision_free_Y_[i] << " circle_r: " << collision_free_R_[i]);
+//    for (int i = 0; i < X_road.size()-1; i++){
+//        Clothoid::buildClothoid(X_road[i], Y_road[i], Theta_road[i], X_road[i+1], Y_road[i+1], Theta_road[i+1], k, dk, L);
+//
+//        Clothoid::pointsOnClothoid(X_road[i], Y_road[i], Theta_road[i], k, dk, L, n_traj_per_cloth + 1, X, Y);
+//        if (i==0){
+//            X_all.insert(X_all.end(), X.begin(), X.end());
+//            Y_all.insert(Y_all.end(), Y.begin(), Y.end());
+//        }
+//        else{
+//            X.erase(X.begin()+0);
+//            Y.erase(Y.begin()+0);
+//            X_all.insert(X_all.end(), X.begin(), X.end());
+//            Y_all.insert(Y_all.end(), Y.begin(), Y.end());
+//        }
+//        total_length_ += L;
+//
+//        for (int j=1; j < n_clothoid; j++){
+//            S_all.push_back(S_all[j-1+i*(n_clothoid-1)]+L/(n_clothoid-1));
+//            ROS_INFO_STREAM("S_all: " << S_all[j]);
+//        }
+//
+//        ROS_INFO_STREAM("X_all: " << X_all[i]);
+//        ROS_INFO_STREAM("Y_all: " << Y_all[i]);
 //    }
 
-    te_collison_free_ = acado_toc(&t);
-    ROS_INFO_STREAM("Free space solve time " << te_collison_free_ * 1e6 << " us");
-}
+    ref_path_x.set_points(S_all, X_all);
+    ref_path_y.set_points(S_all, Y_all);
 
-double MPCC::searchRadius(int x_i, int y_i)
-{
+    ROS_INFO_STREAM("total_length: " << total_length_);
+    dist_spline_pts_ = total_length_ / (n_pts - 1);
+    ROS_INFO_STREAM("dist_spline_pts_: " << dist_spline_pts_);
+    ss.resize(n_pts);
+    xx.resize(n_pts);
+    yy.resize(n_pts);
 
-    double r = collision_free_r_max_, r_ = 0;
-    int search_radius = 1;
-
-    // declare search iterators
-    int search_x_it, search_y_it;
-
-    // Search until an occupied region is found or until the maximum radius is obtained
-    while (r == collision_free_r_max_ && search_radius < collision_free_r_max_/environment_grid_.info.resolution)
-    {
-
-        for (int search_x_it = -search_radius; search_x_it <= search_radius; search_x_it++ ) {
-
-            if (x_i + search_x_it < 0){search_x_it = -x_i;}
-            if (x_i + search_x_it > environment_grid_.info.width){search_x_it = environment_grid_.info.width - x_i;}
-
-            search_y_it = -search_radius;
-            if (y_i + search_y_it < 0){search_y_it = -y_i;}
-            if (getOccupancy(x_i + search_x_it,y_i + search_y_it) > occupied_)
-            {
-                r_ = sqrt(pow(search_x_it,2) + pow(search_y_it,2))*environment_grid_.info.resolution;
-
-                if (r_ < r)
-                {
-                    r = r_;
-                }
-
-            }
-
-            search_y_it = search_radius;
-            if (y_i + search_y_it > environment_grid_.info.height){search_y_it = environment_grid_.info.height - y_i;}
-            if (getOccupancy(x_i + search_x_it,y_i + search_y_it) > occupied_)
-            {
-                r_ = sqrt(pow(search_x_it,2) + pow(search_y_it,2))*environment_grid_.info.resolution;
-
-                if (r_ < r)
-                {
-                    r = r_;
-                }
-
-            }
-        }
-
-        for (int search_y_it = -search_radius; search_y_it <= search_radius; search_y_it++ ) {
-
-            if (y_i + search_y_it < 0){search_y_it = -y_i;}
-            if (y_i + search_y_it > environment_grid_.info.height){search_y_it = environment_grid_.info.height - y_i;}
-
-            search_x_it = -search_radius;
-            if (x_i + search_x_it < 0){search_x_it = -x_i;}
-            if (getOccupancy(x_i + search_x_it,y_i + search_y_it) > occupied_)
-            {
-                r_ = sqrt(pow(search_x_it,2) + pow(search_y_it,2))*environment_grid_.info.resolution;
-
-                if (r_ < r)
-                {
-                    r = r_;
-                }
-
-            }
-
-            search_x_it = search_radius;
-            if (x_i + search_x_it > environment_grid_.info.width){search_x_it = environment_grid_.info.width - x_i;}
-            if (getOccupancy(x_i + search_x_it,y_i + search_y_it) > occupied_)
-            {
-                r_ = sqrt(pow(search_x_it,2) + pow(search_y_it,2))*environment_grid_.info.resolution;
-
-                if (r_ < r)
-                {
-                    r = r_;
-                }
-
-            }
-        }
-
-        // Increase search radius
-        search_radius++;
-//        std::cout << "search radius: " << search_radius << std::endl;
+    for (int i=0; i < n_pts; i++){
+        ss[i] = dist_spline_pts_ * i;
+        xx[i] = ref_path_x(ss[i]);
+        yy[i] = ref_path_y(ss[i]);
+        ROS_INFO_STREAM("ss: " << ss[i]);
+        ROS_INFO_STREAM("xx: " << xx[i]);
+        ROS_INFO_STREAM("yy: " << yy[i]);
     }
 
-    return r;
+    ref_path_x.set_points(ss,xx);
+    ref_path_y.set_points(ss,yy);
 }
 
-int MPCC::getOccupancy(int x_i, int y_i)
-{
-    return environment_grid_.data[environment_grid_.info.width*y_i + x_i];
-
-}
+//void MPCC::ConstructLocalRefPath(){
+//
+//    X_road.resize(controller_config_->ref_x_.size() - traj_i);
+//    Y_road.resize(controller_config_->ref_y_.size() - traj_i);
+//    Theta_road.resize(controller_config_->ref_theta_.size() - traj_i);
+//
+//    for (int ref_point_it = traj_i; ref_point_it < controller_config_->ref_x_.size(); ref_point_it++)
+//    {
+//        X_road[ref_point_it - traj_i] = controller_config_->ref_x_.at(ref_point_it);
+//        Y_road[ref_point_it - traj_i] = controller_config_->ref_y_.at(ref_point_it);
+//        Theta_road[ref_point_it - traj_i] = controller_config_->ref_theta_.at(ref_point_it);
+//    }
+//
+//    double k, dk, L;
+//    std::vector<double> X(10), Y(10);
+//    std::vector<double> X_all, Y_all, S_all;
+//    total_length_= 0;
+//    n_clothoid = controller_config_->ref_x_.size() - traj_i;
+//    n_pts = controller_config_->ref_x_.size() - traj_i;
+//    S_all.push_back(0);
+//
+//    for (int i = 0; i < X_road.size()-1; i++){
+//        Clothoid::buildClothoid(X_road[i], Y_road[i], Theta_road[i], X_road[i+1], Y_road[i+1], Theta_road[i+1], k, dk, L);
+//
+//        Clothoid::pointsOnClothoid(X_road[i], Y_road[i], Theta_road[i], k, dk, L, n_clothoid, X, Y);
+//        if (i==0){
+//            X_all.insert(X_all.end(), X.begin(), X.end());
+//            Y_all.insert(Y_all.end(), Y.begin(), Y.end());
+//        }
+//        else{
+//            X.erase(X.begin()+0);
+//            Y.erase(Y.begin()+0);
+//            X_all.insert(X_all.end(), X.begin(), X.end());
+//            Y_all.insert(Y_all.end(), Y.begin(), Y.end());
+//        }
+//        total_length_ += L;
+//        for (int j=1; j < n_clothoid; j++){
+//            S_all.push_back(S_all[j-1+i*(n_clothoid-1)]+L/(n_clothoid-1));
+//            ROS_INFO_STREAM("S_all: " << S_all[j]);
+//        }
+//        ROS_INFO_STREAM("X_all: " << X_all[i]);
+//        ROS_INFO_STREAM("Y_all: " << Y_all[i]);
+//    }
+//
+//    ref_path_x.set_points(S_all, X_all);
+//    ref_path_y.set_points(S_all, Y_all);
+//
+//    ROS_INFO_STREAM("total_length: " << total_length_);
+//    dist_spline_pts_ = total_length_ / (n_pts - 1);
+//    ROS_INFO_STREAM("dist_spline_pts_: " << dist_spline_pts_);
+//    ss.resize(n_pts);
+//    xx.resize(n_pts);
+//    yy.resize(n_pts);
+//
+//    for (int i=0; i <n_pts; i++){
+//        ss[i] = dist_spline_pts_ * i;
+//        xx[i] = ref_path_x(ss[i]);
+//        yy[i] = ref_path_y(ss[i]);
+//        ROS_INFO_STREAM("ss: " << ss[i]);
+//        ROS_INFO_STREAM("xx: " << xx[i]);
+//        ROS_INFO_STREAM("yy: " << yy[i]);
+//    }
+//
+//    ref_path_x.set_points(ss,xx);
+//    ref_path_y.set_points(ss,yy);
+//}
 
 void MPCC::moveitGoalCB()
 {
@@ -795,56 +892,19 @@ void MPCC::moveitGoalCB()
 		for (N_iter = 0; N_iter < ACADO_N; N_iter++) {
 
             // Initialize Constant Online Data variables
-            acadoVariables.od[(ACADO_NOD * N_iter) + 27] = r_discs_;                                // radius of car discs
-            acadoVariables.od[(ACADO_NOD * N_iter) + 28] = 0; //x_discs_[1];                        // position of the car discs
+            acadoVariables.od[(ACADO_NOD * N_iter) + 38] = r_discs_;                                // radius of car discs
+            acadoVariables.od[(ACADO_NOD * N_iter) + 39] = 0; //x_discs_[1];                        // position of the car discs
         }
 
         traj_i = 0;
+		cloth_i = 0;
 		goal_reached_ = false;
 		last_poly_ = false;
 
-        if (map_service_.call(map_srv_))
-        {
-            ROS_ERROR("Service GetMap succeeded.");
-            environment_grid_ = map_srv_.response.map;
-        }
-        else
-        {
-            ROS_ERROR("Service GetMap failed.");
-        }
-
-        ConstructRefPath();
+//        ConstructRefPath();
+        ConstructLocalRefPath();
 		publishSplineTrajectory();
-
-        ComputeCollisionFreeArea();
-
     }
-}
-
-
-void MPCC::reconfigureCallback(predictive_control::PredictiveControllerConfig& config, uint32_t level){
-
-    ROS_INFO("reconfigure callback!");
-    cost_contour_weight_factors_(0) = config.Wcontour;
-    cost_contour_weight_factors_(1) = config.Wlag;
-    cost_control_weight_factors_(0) = config.Kv;
-    cost_control_weight_factors_(1) = config.Kw;
-
-    slack_weight_= config.Ws;
-    repulsive_weight_ = config.WR;
-
-    reference_velocity_ = config.vRef;
-    collision_free_r_max_ = config.rMax;
-    occupied_ = config.occThres;
-
-	enable_output_ = config.enable_output;
-    loop_mode_ = config.loop_mode;
-	n_iterations_ = config.n_iterations;
-	simulation_mode_ = config.simulation_mode;
-
-    //Search window parameters
-    window_size_ = config.window_size;
-    n_search_points_ = config.n_search_points;
 }
 
 void MPCC::executeTrajectory(const moveit_msgs::RobotTrajectory & traj){
@@ -922,13 +982,15 @@ void MPCC::publishZeroJointVelocity()
 {
     if (activate_debug_output_)
     {
-//        ROS_INFO("Publishing ZERO joint velocity!!");
+        ROS_INFO("Publishing ZERO joint velocity!!");
     }
+
     geometry_msgs::Twist pub_msg;
+
 	if(!simulation_mode_)
 		broadcastTF();
-    controlled_velocity_ = pub_msg;
 
+    controlled_velocity_ = pub_msg;
     controlled_velocity_pub_.publish(controlled_velocity_);
 }
 
@@ -1043,28 +1105,6 @@ void MPCC::publishContourError(void){
     errors.data[1] = lag_error_;
 
     contour_error_pub_.publish(errors);
-}
-
-void MPCC::publishPosConstraint(){
-
-    visualization_msgs::MarkerArray collision_free;
-
-    for (int i = 0; i < ACADO_N; i++)
-    {
-        ellips2.scale.x = collision_free_R_[i]*2.0;
-        ellips2.scale.y = collision_free_R_[i]*2.0;
-        ellips2.pose.position.x = acadoVariables.x[i * ACADO_NX + 0];
-        ellips2.pose.position.y = acadoVariables.x[i * ACADO_NX + 1];
-
-        ellips2.id = 400+i;
-        ellips2.pose.orientation.x = 0;
-        ellips2.pose.orientation.y = 0;
-        ellips2.pose.orientation.z = 0;
-        ellips2.pose.orientation.w = 1;
-        collision_free.markers.push_back(ellips2);
-    }
-
-    collision_free_pub_.publish(collision_free);
 }
 
 void MPCC::publishFeedback(int& it, double& time)
