@@ -197,15 +197,15 @@ public:
     ros::Publisher cartesian_error_pub_;
 
     // publish trajectory
-    ros::Publisher traj_pub_, tr_path_pub_, pred_traj_pub_, pred_cmd_pub_,cost_pub_,robot_collision_space_pub_, spline_traj_pub_,spline_traj_pub2_, contour_error_pub_, feedback_pub_, collision_free_pub_;
+    ros::Publisher traj_pub_, tr_path_pub_, pred_traj_pub_, pred_cmd_pub_,cost_pub_,robot_collision_space_pub_, global_plan_pub_,local_spline_traj_pub1_, local_spline_traj_pub2_, local_spline_traj_pub3_, contour_error_pub_, feedback_pub_, collision_free_pub_;
 	//Predicted trajectory
 	nav_msgs::Path pred_traj_;
 	nav_msgs::Path pred_cmd_;
-	nav_msgs::Path spline_traj_,spline_traj2_;
+	nav_msgs::Path local_spline_traj1_,local_spline_traj2_,local_spline_traj3_;
 	nav_msgs::OccupancyGrid environment_grid_;
     nav_msgs::GetMap map_srv_;
 
-	int traj_i, cloth_i;
+	int traj_i;
 	//Controller options
 	bool enable_output_;
 	int n_iterations_;
@@ -224,7 +224,7 @@ public:
 	std::vector<double> X_road, Y_road, Theta_road;
     double dist_spline_pts_;
     double total_length_;
-    std::vector<double> ss,xx,yy;
+    std::vector<double> ss,xx,yy,vv;
     int n_clothoid, n_pts, N_local, n_traj_per_cloth, n_cloth_segments,n_pts_all ;
     //Search window parameters
     double window_size_;
@@ -289,7 +289,7 @@ private:
 	int idx, idy;
 	double epsilon_;
 
-	visualization_msgs::Marker ellips1, ellips2;
+	visualization_msgs::Marker ellips1, ellips2, global_plan;
 
     // Kinematic variables
 	//To be done kinematic model car
@@ -355,7 +355,7 @@ private:
 	 */
 	void publishPredictedTrajectory(void);
 
-	void publishGlobalSplineTrajectory(void);
+	void publishGlobalPlan(void);
 
 	void publishLocalSplineTrajectory(void);
 
@@ -367,7 +367,7 @@ private:
 
     void publishContourError(void);
 
-    void publishPathFromTrajectory(const moveit_msgs::RobotTrajectory& traj);
+//    void publishPathFromTrajectory(const moveit_msgs::RobotTrajectory& traj);
 
 	void broadcastTF();
 
