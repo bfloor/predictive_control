@@ -225,7 +225,7 @@ public:
     double dist_spline_pts_;
     double total_length_;
     std::vector<double> ss,xx,yy;
-    int n_clothoid,n_pts, N_local, n_traj_per_cloth;
+    int n_clothoid, n_pts, N_local, n_traj_per_cloth, n_cloth_segments,n_pts_all ;
     //Search window parameters
     double window_size_;
     int n_search_points_;
@@ -379,7 +379,9 @@ private:
 
     void ConstructRefPath();
 
-    void ConstructLocalRefPath();
+    void InitLocalRefPath();
+
+    void UpdateLocalRefPath();
 
     void publishFeedback(int& it, double& time);
 

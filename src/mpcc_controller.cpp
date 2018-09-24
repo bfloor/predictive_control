@@ -206,7 +206,25 @@ bool MPCC::initialize()
 		Y_road.resize(controller_config_->ref_y_.size());
 		Theta_road.resize(controller_config_->ref_theta_.size());
 
-		// Resize vector of collision free radii along prediction horizon
+//        // Number of segments in the local reference path
+//        N_local = 3;
+//
+//        // Number of segments in each clothoid fitted through the global points
+//        n_traj_per_cloth = controller_config_->n_poly_per_clothoid_;
+//
+//        // Compute how many clothoid points should be build for the local reference path
+//        int N_cloth = 1 + ceil((double) N_local/n_traj_per_cloth);
+//        n_clothoid = N_cloth + 1;
+//
+//        // Number of points defining the local spline
+//        n_pts = N_cloth*n_traj_per_cloth + 1;
+//        ROS_INFO_STREAM("n_pts: "<< n_pts);
+//
+//        ss.resize(n_pts);
+//        xx.resize(n_pts);
+//        yy.resize(n_pts);
+
+        // Resize vector of collision free radii along prediction horizon
         collision_free_R_.resize(ACADO_N);
         collision_free_X_.resize(ACADO_N);
         collision_free_Y_.resize(ACADO_N);
@@ -358,7 +376,7 @@ void MPCC::runNode(const ros::TimerEvent &event)
         acadoVariables.u[1] = controlled_velocity_.angular.z;
         acadoVariables.u[2] = 0.0000001;           //slack variable
 
-		if(acadoVariables.x[3] > ss[traj_i%n_traj_per_cloth + 1]) {
+		if(acadoVariables.x[3] > ss[1]) {
 
 		    if (traj_i + N_local > controller_config_->ref_x_.size()*n_traj_per_cloth){
 		        goal_reached_ = true;
@@ -373,8 +391,9 @@ void MPCC::runNode(const ros::TimerEvent &event)
                 }
             } else{
 			    traj_i++;
-                ConstructLocalRefPath();
-                acadoVariables.x[3] = ss[traj_i%n_traj_per_cloth];
+                UpdateLocalRefPath();
+//                publishSplineTrajectory();
+                acadoVariables.x[3] = 0;
                 ROS_ERROR_STREAM("SWITCH SPLINE " << acadoVariables.x[3]);
 		    }
         }
@@ -382,9 +401,9 @@ void MPCC::runNode(const ros::TimerEvent &event)
 //        ROS_INFO_STREAM("traj_i: " << traj_i);
 //        ROS_INFO_STREAM("ss_length: " << ss.size());
 
-        if(idx ==1) {
+        if(idx == 1) {
             double smin;
-            smin = spline_closest_point(ss[traj_i%n_traj_per_cloth], 100, acadoVariables.x[3], window_size_, n_search_points_);
+            smin = spline_closest_point(ss[0], 100, acadoVariables.x[3], window_size_, n_search_points_);
             acadoVariables.x[3] = smin;
 //            ROS_ERROR_STREAM("smin: " << smin);
         }
@@ -394,42 +413,74 @@ void MPCC::runNode(const ros::TimerEvent &event)
 
         for (N_iter = 0; N_iter < ACADO_N; N_iter++) {
 
+//            // Initialize Online Data variables
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 0] = ref_path_x.m_a[traj_i%N_local + 0];        // spline coefficients
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 1] = ref_path_x.m_b[traj_i%N_local + 0];
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 2] = ref_path_x.m_c[traj_i%N_local + 0];        // spline coefficients
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 3] = ref_path_x.m_d[traj_i%N_local + 0];
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 4] = ref_path_y.m_a[traj_i%N_local + 0];        // spline coefficients
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 5] = ref_path_y.m_b[traj_i%N_local + 0];
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 6] = ref_path_y.m_c[traj_i%N_local + 0];        // spline coefficients
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 7] = ref_path_y.m_d[traj_i%N_local + 0];
+//
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 8] = ref_path_x.m_a[traj_i%N_local + 1];         // spline coefficients
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 9] = ref_path_x.m_b[traj_i%N_local + 1];
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 10] = ref_path_x.m_c[traj_i%N_local + 1];        // spline coefficients
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 11] = ref_path_x.m_d[traj_i%N_local + 1];
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 12] = ref_path_y.m_a[traj_i%N_local + 1];        // spline coefficients
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 13] = ref_path_y.m_b[traj_i%N_local + 1];
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 14] = ref_path_y.m_c[traj_i%N_local + 1];        // spline coefficients
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 15] = ref_path_y.m_d[traj_i%N_local + 1];
+//
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 16] = ref_path_x.m_a[traj_i%N_local + 2];         // spline coefficients
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 17] = ref_path_x.m_b[traj_i%N_local + 2];
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 18] = ref_path_x.m_c[traj_i%N_local + 2];        // spline coefficients
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 19] = ref_path_x.m_d[traj_i%N_local + 2];
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 20] = ref_path_y.m_a[traj_i%N_local + 2];        // spline coefficients
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 21] = ref_path_y.m_b[traj_i%N_local + 2];
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 22] = ref_path_y.m_c[traj_i%N_local + 2];        // spline coefficients
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 23] = ref_path_y.m_d[traj_i%N_local + 2];
+
             // Initialize Online Data variables
-            acadoVariables.od[(ACADO_NOD * N_iter) + 0] = ref_path_x.m_a[traj_i%N_local + 0];        // spline coefficients
-            acadoVariables.od[(ACADO_NOD * N_iter) + 1] = ref_path_x.m_b[traj_i%N_local + 0];
-            acadoVariables.od[(ACADO_NOD * N_iter) + 2] = ref_path_x.m_c[traj_i%N_local + 0];        // spline coefficients
-            acadoVariables.od[(ACADO_NOD * N_iter) + 3] = ref_path_x.m_d[traj_i%N_local + 0];
-            acadoVariables.od[(ACADO_NOD * N_iter) + 4] = ref_path_y.m_a[traj_i%N_local + 0];        // spline coefficients
-            acadoVariables.od[(ACADO_NOD * N_iter) + 5] = ref_path_y.m_b[traj_i%N_local + 0];
-            acadoVariables.od[(ACADO_NOD * N_iter) + 6] = ref_path_y.m_c[traj_i%N_local + 0];        // spline coefficients
-            acadoVariables.od[(ACADO_NOD * N_iter) + 7] = ref_path_y.m_d[traj_i%N_local + 0];
+            acadoVariables.od[(ACADO_NOD * N_iter) + 0 ] = ref_path_x.m_a[0];        // spline coefficients
+            acadoVariables.od[(ACADO_NOD * N_iter) + 1 ] = ref_path_x.m_b[0];
+            acadoVariables.od[(ACADO_NOD * N_iter) + 2 ] = ref_path_x.m_c[0];        // spline coefficients
+            acadoVariables.od[(ACADO_NOD * N_iter) + 3 ] = ref_path_x.m_d[0];
+            acadoVariables.od[(ACADO_NOD * N_iter) + 4 ] = ref_path_y.m_a[0];        // spline coefficients
+            acadoVariables.od[(ACADO_NOD * N_iter) + 5 ] = ref_path_y.m_b[0];
+            acadoVariables.od[(ACADO_NOD * N_iter) + 6 ] = ref_path_y.m_c[0];        // spline coefficients
+            acadoVariables.od[(ACADO_NOD * N_iter) + 7 ] = ref_path_y.m_d[0];
 
-            acadoVariables.od[(ACADO_NOD * N_iter) + 8] = ref_path_x.m_a[traj_i%N_local + 1];         // spline coefficients
-            acadoVariables.od[(ACADO_NOD * N_iter) + 9] = ref_path_x.m_b[traj_i%N_local + 1];
-            acadoVariables.od[(ACADO_NOD * N_iter) + 10] = ref_path_x.m_c[traj_i%N_local + 1];        // spline coefficients
-            acadoVariables.od[(ACADO_NOD * N_iter) + 11] = ref_path_x.m_d[traj_i%N_local + 1];
-            acadoVariables.od[(ACADO_NOD * N_iter) + 12] = ref_path_y.m_a[traj_i%N_local + 1];        // spline coefficients
-            acadoVariables.od[(ACADO_NOD * N_iter) + 13] = ref_path_y.m_b[traj_i%N_local + 1];
-            acadoVariables.od[(ACADO_NOD * N_iter) + 14] = ref_path_y.m_c[traj_i%N_local + 1];        // spline coefficients
-            acadoVariables.od[(ACADO_NOD * N_iter) + 15] = ref_path_y.m_d[traj_i%N_local + 1];
+            acadoVariables.od[(ACADO_NOD * N_iter) + 8 ] = ref_path_x.m_a[1];         // spline coefficients
+            acadoVariables.od[(ACADO_NOD * N_iter) + 9 ] = ref_path_x.m_b[1];
+            acadoVariables.od[(ACADO_NOD * N_iter) + 10] = ref_path_x.m_c[1];        // spline coefficients
+            acadoVariables.od[(ACADO_NOD * N_iter) + 11] = ref_path_x.m_d[1];
+            acadoVariables.od[(ACADO_NOD * N_iter) + 12] = ref_path_y.m_a[1];        // spline coefficients
+            acadoVariables.od[(ACADO_NOD * N_iter) + 13] = ref_path_y.m_b[1];
+            acadoVariables.od[(ACADO_NOD * N_iter) + 14] = ref_path_y.m_c[1];        // spline coefficients
+            acadoVariables.od[(ACADO_NOD * N_iter) + 15] = ref_path_y.m_d[1];
 
-            acadoVariables.od[(ACADO_NOD * N_iter) + 16] = ref_path_x.m_a[traj_i%N_local + 2];         // spline coefficients
-            acadoVariables.od[(ACADO_NOD * N_iter) + 17] = ref_path_x.m_b[traj_i%N_local + 2];
-            acadoVariables.od[(ACADO_NOD * N_iter) + 18] = ref_path_x.m_c[traj_i%N_local + 2];        // spline coefficients
-            acadoVariables.od[(ACADO_NOD * N_iter) + 19] = ref_path_x.m_d[traj_i%N_local + 2];
-            acadoVariables.od[(ACADO_NOD * N_iter) + 20] = ref_path_y.m_a[traj_i%N_local + 2];        // spline coefficients
-            acadoVariables.od[(ACADO_NOD * N_iter) + 21] = ref_path_y.m_b[traj_i%N_local + 2];
-            acadoVariables.od[(ACADO_NOD * N_iter) + 22] = ref_path_y.m_c[traj_i%N_local + 2];        // spline coefficients
-            acadoVariables.od[(ACADO_NOD * N_iter) + 23] = ref_path_y.m_d[traj_i%N_local + 2];
+            acadoVariables.od[(ACADO_NOD * N_iter) + 16] = ref_path_x.m_a[2];         // spline coefficients
+            acadoVariables.od[(ACADO_NOD * N_iter) + 17] = ref_path_x.m_b[2];
+            acadoVariables.od[(ACADO_NOD * N_iter) + 18] = ref_path_x.m_c[2];        // spline coefficients
+            acadoVariables.od[(ACADO_NOD * N_iter) + 19] = ref_path_x.m_d[2];
+            acadoVariables.od[(ACADO_NOD * N_iter) + 20] = ref_path_y.m_a[2];        // spline coefficients
+            acadoVariables.od[(ACADO_NOD * N_iter) + 21] = ref_path_y.m_b[2];
+            acadoVariables.od[(ACADO_NOD * N_iter) + 22] = ref_path_y.m_c[2];        // spline coefficients
+            acadoVariables.od[(ACADO_NOD * N_iter) + 23] = ref_path_y.m_d[2];
 
 			acadoVariables.od[(ACADO_NOD * N_iter) + 24] = cost_contour_weight_factors_(0);       // weight factor on contour error
 			acadoVariables.od[(ACADO_NOD * N_iter) + 25] = cost_contour_weight_factors_(1);       // weight factor on lag error
 			acadoVariables.od[(ACADO_NOD * N_iter) + 26] = cost_control_weight_factors_(0);      // weight factor on theta
 			acadoVariables.od[(ACADO_NOD * N_iter) + 27] = cost_control_weight_factors_(1);      // weight factor on v
 
-            acadoVariables.od[(ACADO_NOD * N_iter) + 28 ] = ss[traj_i%N_local + 0];
-            acadoVariables.od[(ACADO_NOD * N_iter) + 29 ] = ss[traj_i%N_local + 1];
-            acadoVariables.od[(ACADO_NOD * N_iter) + 30 ] = ss[traj_i%N_local + 2];
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 28 ] = ss[traj_i%N_local + 0];
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 29 ] = ss[traj_i%N_local + 1];
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 30 ] = ss[traj_i%N_local + 2];
+
+            acadoVariables.od[(ACADO_NOD * N_iter) + 28 ] = ss[0];
+            acadoVariables.od[(ACADO_NOD * N_iter) + 29 ] = ss[1];
+            acadoVariables.od[(ACADO_NOD * N_iter) + 30 ] = ss[2];
 
             if (goal_reached_){
                 acadoVariables.od[(ACADO_NOD * N_iter) + 31] = 0;
@@ -447,8 +498,10 @@ void MPCC::runNode(const ros::TimerEvent &event)
                 acadoVariables.od[(ACADO_NOD * N_iter) + 33] = reference_velocity_;
             }
 
-			acadoVariables.od[(ACADO_NOD * N_iter) + 34] = ss[traj_i%N_local + 1] + 0.02;
-            acadoVariables.od[(ACADO_NOD * N_iter) + 35] = ss[traj_i%N_local + 2] + 0.02;
+//			acadoVariables.od[(ACADO_NOD * N_iter) + 34] = ss[traj_i%N_local + 1] + 0.02;
+//            acadoVariables.od[(ACADO_NOD * N_iter) + 35] = ss[traj_i%N_local + 2] + 0.02;
+            acadoVariables.od[(ACADO_NOD * N_iter) + 34] = ss[1] + 0.02;
+            acadoVariables.od[(ACADO_NOD * N_iter) + 35] = ss[2] + 0.02;
 
             acadoVariables.od[(ACADO_NOD * N_iter) + 36] = slack_weight_;        // weight on the slack variable
             acadoVariables.od[(ACADO_NOD * N_iter) + 37] = repulsive_weight_;    // weight on the repulsive cost
@@ -472,9 +525,9 @@ void MPCC::runNode(const ros::TimerEvent &event)
 		acadoVariables.x0[ 3 ] = acadoVariables.x[3];
         acadoVariables.x0[ 4 ] = 0.0000001;             //dummy state
 
-        ROS_INFO_STREAM("ss[traj_i%2]: " << ss[traj_i%n_traj_per_cloth]);
-        ROS_INFO_STREAM("ss[traj_i%2 + 1]: " << ss[traj_i%n_traj_per_cloth + 1]);
-        ROS_INFO_STREAM("acadoVariables.x[3]: " << acadoVariables.x[3]);
+//        ROS_INFO_STREAM("ss[traj_i%2]: " << ss[traj_i%n_traj_per_cloth]);
+//        ROS_INFO_STREAM("ss[traj_i%2 + 1]: " << ss[traj_i%n_traj_per_cloth + 1]);
+//        ROS_INFO_STREAM("acadoVariables.x[3]: " << acadoVariables.x[3]);
 
         acado_preparationStep();
 
@@ -578,7 +631,188 @@ void MPCC::moveGoalCB()
     }
 }
 
-void MPCC::ConstructLocalRefPath(){
+//void MPCC::ConstructLocalRefPath() {
+//
+//    // Compute how many clothoid points should be build for the local reference path
+//    int N_cloth = 1 + ceil((double) N_local / n_traj_per_cloth);
+//
+//    ROS_INFO_STREAM("N_cloth: " << N_cloth);
+//    ROS_INFO_STREAM("n_clothoid: " << n_clothoid);
+//
+//    // Based on counter of segments, compute clothoid index
+//    cloth_i = floor(((double) traj_i) / ((double) n_traj_per_cloth));
+//    ROS_INFO_STREAM("cloth_i: " << cloth_i);
+//    ROS_INFO_STREAM("traj_i: " << traj_i);
+//
+//    for (int spline_it = 0; spline_it < xx.size() - 1; spline_it++){
+//        ss[i] = ss[i + 1] - ss[1];
+//        xx[i] = xx[i + 1];
+//        yy[i] = yy[i + 1];
+//    }
+//
+//    // Initialize vectors containing the global path
+//    X_road.resize(n_clothoid);
+//    Y_road.resize(n_clothoid);
+//    Theta_road.resize(n_clothoid);
+//
+//    for (int ref_point_it = cloth_i; ref_point_it < cloth_i + n_clothoid; ref_point_it++) {
+//        X_road[ref_point_it - cloth_i] = controller_config_->ref_x_.at(ref_point_it);
+//        Y_road[ref_point_it - cloth_i] = controller_config_->ref_y_.at(ref_point_it);
+//        Theta_road[ref_point_it - cloth_i] = controller_config_->ref_theta_.at(ref_point_it);
+//    }
+//
+//    // Initialize variables to generate clothoid local reference path
+//    double k, dk, L;
+//
+//    std::vector<double> X, Y;
+//    std::vector<double> X_all(n_pts), Y_all(n_pts), S_all(n_pts);
+//
+//    total_length_ = 0;
+//
+//    ROS_INFO_STREAM("X_road size: " << X_road.size());
+//
+//    for (int clothoid_it = 0; clothoid_it < X_road.size() - 1; clothoid_it++) {
+//        Clothoid::buildClothoid(X_road[clothoid_it], Y_road[clothoid_it], Theta_road[clothoid_it],
+//                                X_road[clothoid_it + 1], Y_road[clothoid_it + 1], Theta_road[clothoid_it + 1], k, dk,
+//                                L);
+//
+//        Clothoid::pointsOnClothoid(X_road[clothoid_it], Y_road[clothoid_it], Theta_road[clothoid_it], k, dk, L,
+//                                   n_traj_per_cloth + 1, X, Y);
+//
+//        ROS_INFO_STREAM("clothoid_it: " << clothoid_it);
+//
+//        for (int clothoid_points_it = 0; clothoid_points_it < n_traj_per_cloth; clothoid_points_it++) {
+//            ROS_INFO_STREAM("X: " << X[clothoid_points_it]);
+//            ROS_INFO_STREAM("Y: " << Y[clothoid_points_it]);
+//
+//            X_all[clothoid_it * n_traj_per_cloth + clothoid_points_it] = X[clothoid_points_it];
+//            Y_all[clothoid_it * n_traj_per_cloth + clothoid_points_it] = Y[clothoid_points_it];
+//            S_all[clothoid_it * n_traj_per_cloth + clothoid_points_it] =
+//                    total_length_ + (clothoid_points_it) * L / n_traj_per_cloth;
+//        }
+//
+//        total_length_ += L;
+//    }
+//
+//    X_all[n_pts - 1] = X_road[X_road.size() - 1];
+//    Y_all[n_pts - 1] = Y_road[X_road.size() - 1];
+//    S_all[n_pts - 1] = total_length_;
+//
+//    for (int clothoid_points_it = 0; clothoid_points_it < X_all.size(); clothoid_points_it++) {
+//        ROS_INFO_STREAM("X_all: " << X_all[clothoid_points_it]);
+//        ROS_INFO_STREAM("Y_all: " << Y_all[clothoid_points_it]);
+//        ROS_INFO_STREAM("S_all: " << S_all[clothoid_points_it]);
+//    }
+//
+//    ref_path_x.set_points(S_all, X_all);
+//    ref_path_y.set_points(S_all, Y_all);
+//
+//    ROS_INFO_STREAM("total_length: " << total_length_);
+//    dist_spline_pts_ = total_length_ / (n_pts - 1);
+//    ROS_INFO_STREAM("dist_spline_pts_: " << dist_spline_pts_);
+//
+//    for (int i = 0; i < n_pts; i++) {
+//        ss[i] = dist_spline_pts_ * i;
+//        xx[i] = ref_path_x(ss[i]);
+//        yy[i] = ref_path_y(ss[i]);
+//        ROS_INFO_STREAM("ss: " << ss[i]);
+//        ROS_INFO_STREAM("xx: " << xx[i]);
+//        ROS_INFO_STREAM("yy: " << yy[i]);
+//    }
+//
+//    ref_path_x.set_points(ss,xx);
+//    ref_path_y.set_points(ss,yy);
+//}
+
+
+//void MPCC::ConstructLocalRefPath() {
+//
+//    // Compute how many clothoid points should be build for the local reference path
+//    int N_cloth = 1 + ceil((double) N_local / n_traj_per_cloth);
+//
+//    ROS_INFO_STREAM("N_cloth: " << N_cloth);
+//    ROS_INFO_STREAM("n_clothoid: " << n_clothoid);
+//
+//    // Based on counter of segments, compute clothoid index
+//    cloth_i = floor(((double) traj_i) / ((double) n_traj_per_cloth));
+//    ROS_INFO_STREAM("cloth_i: " << cloth_i);
+//    ROS_INFO_STREAM("traj_i: " << traj_i);
+//
+//    // Initialize vectors containing the global path
+//    X_road.resize(n_clothoid);
+//    Y_road.resize(n_clothoid);
+//    Theta_road.resize(n_clothoid);
+//
+//    for (int ref_point_it = cloth_i; ref_point_it < cloth_i + n_clothoid; ref_point_it++) {
+//        X_road[ref_point_it - cloth_i] = controller_config_->ref_x_.at(ref_point_it);
+//        Y_road[ref_point_it - cloth_i] = controller_config_->ref_y_.at(ref_point_it);
+//        Theta_road[ref_point_it - cloth_i] = controller_config_->ref_theta_.at(ref_point_it);
+//    }
+//
+//    // Initialize variables to generate clothoid local reference path
+//    double k, dk, L;
+//
+//    std::vector<double> X, Y;
+//    std::vector<double> X_all(n_pts), Y_all(n_pts), S_all(n_pts);
+//
+//    total_length_ = 0;
+//
+//    ROS_INFO_STREAM("X_road size: " << X_road.size());
+//
+//    for (int clothoid_it = 0; clothoid_it < X_road.size() - 1; clothoid_it++) {
+//        Clothoid::buildClothoid(X_road[clothoid_it], Y_road[clothoid_it], Theta_road[clothoid_it],
+//                                X_road[clothoid_it + 1], Y_road[clothoid_it + 1], Theta_road[clothoid_it + 1], k, dk,
+//                                L);
+//
+//        Clothoid::pointsOnClothoid(X_road[clothoid_it], Y_road[clothoid_it], Theta_road[clothoid_it], k, dk, L,
+//                                   n_traj_per_cloth + 1, X, Y);
+//
+//        ROS_INFO_STREAM("clothoid_it: " << clothoid_it);
+//
+//        for (int clothoid_points_it = 0; clothoid_points_it < n_traj_per_cloth; clothoid_points_it++) {
+//            ROS_INFO_STREAM("X: " << X[clothoid_points_it]);
+//            ROS_INFO_STREAM("Y: " << Y[clothoid_points_it]);
+//
+//            X_all[clothoid_it * n_traj_per_cloth + clothoid_points_it] = X[clothoid_points_it];
+//            Y_all[clothoid_it * n_traj_per_cloth + clothoid_points_it] = Y[clothoid_points_it];
+//            S_all[clothoid_it * n_traj_per_cloth + clothoid_points_it] =
+//                    total_length_ + (clothoid_points_it) * L / n_traj_per_cloth;
+//        }
+//
+//        total_length_ += L;
+//    }
+//
+//    X_all[n_pts - 1] = X_road[X_road.size() - 1];
+//    Y_all[n_pts - 1] = Y_road[X_road.size() - 1];
+//    S_all[n_pts - 1] = total_length_;
+//
+//    for (int clothoid_points_it = 0; clothoid_points_it < X_all.size(); clothoid_points_it++) {
+//        ROS_INFO_STREAM("X_all: " << X_all[clothoid_points_it]);
+//        ROS_INFO_STREAM("Y_all: " << Y_all[clothoid_points_it]);
+//        ROS_INFO_STREAM("S_all: " << S_all[clothoid_points_it]);
+//    }
+//
+//    ref_path_x.set_points(S_all, X_all);
+//    ref_path_y.set_points(S_all, Y_all);
+//
+//    ROS_INFO_STREAM("total_length: " << total_length_);
+//    dist_spline_pts_ = total_length_ / (n_pts - 1);
+//    ROS_INFO_STREAM("dist_spline_pts_: " << dist_spline_pts_);
+//
+//    for (int i = 0; i < n_pts; i++) {
+//        ss[i] = dist_spline_pts_ * i;
+//        xx[i] = ref_path_x(ss[i]);
+//        yy[i] = ref_path_y(ss[i]);
+//        ROS_INFO_STREAM("ss: " << ss[i]);
+//        ROS_INFO_STREAM("xx: " << xx[i]);
+//        ROS_INFO_STREAM("yy: " << yy[i]);
+//    }
+//
+//    ref_path_x.set_points(ss,xx);
+//    ref_path_y.set_points(ss,yy);
+//}
+
+void MPCC::InitLocalRefPath() {
 
     // Number of segments in the local reference path
     N_local = 3;
@@ -586,95 +820,182 @@ void MPCC::ConstructLocalRefPath(){
     // Number of segments in each clothoid fitted through the global points
     n_traj_per_cloth = controller_config_->n_poly_per_clothoid_;
 
-    // Compute how many clothoid points should be build for the local reference path
-    int N_cloth = 1 + ceil((double) N_local/n_traj_per_cloth);
-    n_clothoid = N_cloth + 1;
+    // Compute how many clothoid segments and points should be build for the local reference path
+    n_cloth_segments = ceil((double) N_local/n_traj_per_cloth);
+    n_clothoid = n_cloth_segments + 1;
 
-    ROS_INFO_STREAM("N_cloth: "<< N_cloth);
-    ROS_INFO_STREAM("n_clothoid: "<< n_clothoid);
+    // Number of points defining the local spline
+    n_pts = N_local + 1;
+    // Number of spline points in the local clothoid path
+    n_pts_all = n_cloth_segments*n_traj_per_cloth + 1;
+
+    ROS_INFO_STREAM("n_pts: "<< n_pts);
+    ROS_INFO_STREAM("n_cloth_segments: " << n_cloth_segments);
+    ROS_INFO_STREAM("n_clothoid: " << n_clothoid);
 
     // Initialize vectors containing the global path
     X_road.resize(n_clothoid);
     Y_road.resize(n_clothoid);
     Theta_road.resize(n_clothoid);
 
-    // Based on counter of segments, compute clothoid index
-    cloth_i = floor(((double)traj_i)/((double)n_traj_per_cloth));
-    ROS_INFO_STREAM("cloth_i: "<< cloth_i);
-    ROS_INFO_STREAM("traj_i: "<< traj_i);
-
-    for (int ref_point_it = cloth_i; ref_point_it < cloth_i + n_clothoid; ref_point_it++)
-    {
-        X_road[ref_point_it - cloth_i] = controller_config_->ref_x_.at(ref_point_it);
-        Y_road[ref_point_it - cloth_i] = controller_config_->ref_y_.at(ref_point_it);
-        Theta_road[ref_point_it - cloth_i] = controller_config_->ref_theta_.at(ref_point_it);
+    for (int ref_point_it = 0; ref_point_it < n_clothoid; ref_point_it++) {
+        X_road[ref_point_it] = controller_config_->ref_x_.at(ref_point_it);
+        Y_road[ref_point_it] = controller_config_->ref_y_.at(ref_point_it);
+        Theta_road[ref_point_it] = controller_config_->ref_theta_.at(ref_point_it);
     }
-
-    // Number of points defining the spline
-    n_pts = N_cloth*n_traj_per_cloth + 1;
-    ROS_INFO_STREAM("n_pts: "<< n_pts);
 
     // Initialize variables to generate clothoid local reference path
     double k, dk, L;
 
     std::vector<double> X, Y;
-    std::vector<double> X_all(n_pts), Y_all(n_pts), S_all(n_pts);
-    total_length_= 0;
+    std::vector<double> X_all(n_pts_all), Y_all(n_pts_all), S_all(n_pts_all);
 
     total_length_ = 0;
 
     ROS_INFO_STREAM("X_road size: " << X_road.size());
 
-    for (int clothoid_it = 0; clothoid_it < X_road.size() - 1; clothoid_it++){
-        Clothoid::buildClothoid(X_road[clothoid_it], Y_road[clothoid_it], Theta_road[clothoid_it], X_road[clothoid_it+1], Y_road[clothoid_it+1], Theta_road[clothoid_it+1], k, dk, L);
+    for (int clothoid_it = 0; clothoid_it < X_road.size() - 1; clothoid_it++) {
+        Clothoid::buildClothoid(X_road[clothoid_it], Y_road[clothoid_it], Theta_road[clothoid_it],
+                                X_road[clothoid_it + 1], Y_road[clothoid_it + 1], Theta_road[clothoid_it + 1], k, dk,
+                                L);
 
-        Clothoid::pointsOnClothoid(X_road[clothoid_it], Y_road[clothoid_it], Theta_road[clothoid_it], k, dk, L, n_traj_per_cloth + 1, X, Y);
+        Clothoid::pointsOnClothoid(X_road[clothoid_it], Y_road[clothoid_it], Theta_road[clothoid_it], k, dk, L,
+                                   n_traj_per_cloth + 1, X, Y);
 
         ROS_INFO_STREAM("clothoid_it: " << clothoid_it);
 
-        for (int clothoid_points_it = 0; clothoid_points_it < n_traj_per_cloth; clothoid_points_it++){
+        for (int clothoid_points_it = 0; clothoid_points_it < n_traj_per_cloth; clothoid_points_it++) {
             ROS_INFO_STREAM("X: " << X[clothoid_points_it]);
             ROS_INFO_STREAM("Y: " << Y[clothoid_points_it]);
 
-            X_all[clothoid_it*n_traj_per_cloth + clothoid_points_it] = X[clothoid_points_it];
-            Y_all[clothoid_it*n_traj_per_cloth + clothoid_points_it] = Y[clothoid_points_it];
-            S_all[clothoid_it*n_traj_per_cloth + clothoid_points_it] = total_length_ + (clothoid_points_it)*L/n_traj_per_cloth;
+            X_all[clothoid_it * n_traj_per_cloth + clothoid_points_it] = X[clothoid_points_it];
+            Y_all[clothoid_it * n_traj_per_cloth + clothoid_points_it] = Y[clothoid_points_it];
+            S_all[clothoid_it * n_traj_per_cloth + clothoid_points_it] =
+                    total_length_ + (clothoid_points_it) * L / n_traj_per_cloth;
         }
 
         total_length_ += L;
     }
 
-    X_all[n_pts - 1] = X_road[X_road.size() - 1];
-    Y_all[n_pts - 1] = Y_road[X_road.size() - 1];
-    S_all[n_pts - 1] = total_length_;
 
-    for (int clothoid_points_it = 0; clothoid_points_it < X_all.size(); clothoid_points_it++){
+    X_all[n_pts_all - 1] = X_road[X_road.size() - 1];
+    Y_all[n_pts_all - 1] = Y_road[X_road.size() - 1];
+    S_all[n_pts_all - 1] = total_length_;
+
+    for (int clothoid_points_it = 0; clothoid_points_it < X_all.size(); clothoid_points_it++) {
         ROS_INFO_STREAM("X_all: " << X_all[clothoid_points_it]);
         ROS_INFO_STREAM("Y_all: " << Y_all[clothoid_points_it]);
         ROS_INFO_STREAM("S_all: " << S_all[clothoid_points_it]);
     }
 
-    ref_path_x.set_points(S_all, X_all);
-    ref_path_y.set_points(S_all, Y_all);
-
-    ROS_INFO_STREAM("total_length: " << total_length_);
-    dist_spline_pts_ = total_length_ / (n_pts - 1);
-    ROS_INFO_STREAM("dist_spline_pts_: " << dist_spline_pts_);
     ss.resize(n_pts);
     xx.resize(n_pts);
     yy.resize(n_pts);
 
-    for (int i=0; i < n_pts; i++){
-        ss[i] = dist_spline_pts_ * i;
-        xx[i] = ref_path_x(ss[i]);
-        yy[i] = ref_path_y(ss[i]);
+    for (int local_points_it = 0; local_points_it < n_pts; local_points_it++ ) {
+        xx[local_points_it] = X_all[local_points_it];
+        yy[local_points_it] = Y_all[local_points_it];
+        ss[local_points_it] = S_all[local_points_it];
+    }
+
+    total_length_ = ss[n_pts - 1];
+
+    // Set local spline points
+    ref_path_x.set_points(ss,xx);
+    ref_path_y.set_points(ss,yy);
+
+    // Print local spline points
+    for (int i = 0; i < n_pts; i++) {
         ROS_INFO_STREAM("ss: " << ss[i]);
         ROS_INFO_STREAM("xx: " << xx[i]);
         ROS_INFO_STREAM("yy: " << yy[i]);
     }
+}
 
+void MPCC::UpdateLocalRefPath() {
+
+    double ss_start = ss[1];
+
+    // Shift local reference path segments one place
+    for (int local_path_it = 0; local_path_it < n_pts - 1; local_path_it++) {
+        ss[local_path_it] = ss[local_path_it + 1] - ss_start;
+        xx[local_path_it] = xx[local_path_it + 1];
+        yy[local_path_it] = yy[local_path_it + 1];
+    }
+
+    int cloth_end_i = floor( ((double) (traj_i + N_local - 1))/((double) n_traj_per_cloth) );
+
+    X_road[0] = controller_config_->ref_x_.at(cloth_end_i);
+    X_road[1] = controller_config_->ref_x_.at(cloth_end_i + 1);
+
+    Y_road[0] = controller_config_->ref_y_.at(cloth_end_i);
+    Y_road[1] = controller_config_->ref_y_.at(cloth_end_i + 1);
+
+    Theta_road[0] = controller_config_->ref_theta_.at(cloth_end_i);
+    Theta_road[1] = controller_config_->ref_theta_.at(cloth_end_i + 1);
+
+    ROS_INFO_STREAM("X_road0: " << X_road[0]);
+    ROS_INFO_STREAM("Y_road0: " << Y_road[0]);
+    ROS_INFO_STREAM("Theta_road0: " << Theta_road[0]);
+
+    ROS_INFO_STREAM("X_road1: " << X_road[1]);
+    ROS_INFO_STREAM("Y_road1: " << Y_road[1]);
+    ROS_INFO_STREAM("Theta_road1: " << Theta_road[1]);
+
+    // Initialize variables to generate clothoid local reference path
+    double k, dk, L;
+
+    std::vector<double> X, Y;
+    std::vector<double> X_all(3), Y_all(3), S_all(3);
+
+    total_length_ = 0;
+
+    Clothoid::buildClothoid(X_road[0], Y_road[0], Theta_road[0], X_road[1], Y_road[1], Theta_road[1], k, dk,L);
+
+    Clothoid::pointsOnClothoid(X_road[0], Y_road[0], Theta_road[0], k, dk, L, n_traj_per_cloth + 1, X, Y);
+
+    X_all[0] = X[0];
+    Y_all[0] = Y[0];
+    S_all[0] = 0;
+
+    X_all[1] = X[1];
+    Y_all[1] = Y[1];
+    S_all[1] = L/2;
+
+    X_all[2] = X_road[1];
+    Y_all[2] = Y_road[1];
+    S_all[2] = L;
+
+    ROS_INFO_STREAM("Update local path for traj_i = " << traj_i << ", cloth_end_i = " << cloth_end_i);
+
+    ROS_INFO_STREAM("X_all0: " << X_all[0]);
+    ROS_INFO_STREAM("Y_all0: " << Y_all[0]);
+    ROS_INFO_STREAM("S_all0: " << S_all[0]);
+
+    ROS_INFO_STREAM("X_all1: " << X_all[1]);
+    ROS_INFO_STREAM("Y_all1: " << Y_all[1]);
+    ROS_INFO_STREAM("S_all1: " << S_all[1]);
+
+    ROS_INFO_STREAM("X_all2: " << X_all[2]);
+    ROS_INFO_STREAM("Y_all2: " << Y_all[2]);
+    ROS_INFO_STREAM("S_all2: " << S_all[2]);
+
+    ss[n_pts - 1] = ss[n_pts - 2] + S_all[traj_i%n_traj_per_cloth + 1] - S_all[traj_i%n_traj_per_cloth];
+    xx[n_pts - 1] = X_all[traj_i%n_traj_per_cloth + 1];
+    yy[n_pts - 1] = Y_all[traj_i%n_traj_per_cloth + 1];
+
+    // Set local spline points
     ref_path_x.set_points(ss,xx);
     ref_path_y.set_points(ss,yy);
+
+    total_length_ = ss[n_pts - 1];
+
+    // Print local spline points
+    for (int i = 0; i < n_pts; i++) {
+        ROS_INFO_STREAM("ss: " << ss[i]);
+        ROS_INFO_STREAM("xx: " << xx[i]);
+        ROS_INFO_STREAM("yy: " << yy[i]);
+    }
 }
 
 void MPCC::moveitGoalCB()
@@ -709,7 +1030,8 @@ void MPCC::moveitGoalCB()
 		last_poly_ = false;
 
 //        ConstructRefPath();
-        ConstructLocalRefPath();
+//        ConstructLocalRefPath();
+        InitLocalRefPath();
 		publishSplineTrajectory();
     }
 }
@@ -805,11 +1127,11 @@ void MPCC::publishSplineTrajectory(void)
 {
 	spline_traj_.header.stamp = ros::Time::now();
 	spline_traj_.header.frame_id = controller_config_->tracking_frame_;
+
 	for (int i = 0; i < 100; i++) // 100 points
 	{
-		spline_traj_.poses[i].pose.position.x = ref_path_x(i*(n_pts-1)*dist_spline_pts_/100.0); //x
-		spline_traj_.poses[i].pose.position.y = ref_path_y(i*(n_pts-1)*dist_spline_pts_/100.0); //y
-
+		spline_traj_.poses[i].pose.position.x = ref_path_x(i*total_length_/100.0); //x
+		spline_traj_.poses[i].pose.position.y = ref_path_y(i*total_length_/100.0); //y
 	}
 
 	ROS_INFO_STREAM("REF_PATH_X size:  " << ref_path_x.m_a.size());
@@ -825,7 +1147,8 @@ void MPCC::publishAnaliticSplineTrajectory(void)
     int j=0;
 	for (int i = 0; i < 100; i++)
 	{
-        s= i*(n_pts-1)*dist_spline_pts_/100.0;
+//        s= i*(n_pts-1)*dist_spline_pts_/100.0;
+        s= i*total_length_/100.0;
         if(s>ss[j+1])
             j+=1;
         si=s-ss[j];
