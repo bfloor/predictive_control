@@ -355,9 +355,9 @@ private:
 	 */
 	void publishPredictedTrajectory(void);
 
-	void publishSplineTrajectory(void);
+	void publishGlobalSplineTrajectory(void);
 
-	void publishAnaliticSplineTrajectory(void);
+	void publishLocalSplineTrajectory(void);
 
 	void publishPredictedOutput(void);
 

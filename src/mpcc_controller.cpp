@@ -554,7 +554,7 @@ void MPCC::runNode(const ros::TimerEvent &event)
         publishPredictedTrajectory();
 		publishPredictedCollisionSpace();
 		publishPredictedOutput();
-		publishAnaliticSplineTrajectory();
+		publishLocalSplineTrajectory();
 		broadcastPathPose();
         publishContourError();
 		cost_.data = acado_getObjective();
@@ -1032,7 +1032,7 @@ void MPCC::moveitGoalCB()
 //        ConstructRefPath();
 //        ConstructLocalRefPath();
         InitLocalRefPath();
-		publishSplineTrajectory();
+		publishLocalSplineTrajectory();
     }
 }
 
@@ -1123,7 +1123,7 @@ void MPCC::publishZeroJointVelocity()
     controlled_velocity_pub_.publish(controlled_velocity_);
 }
 
-void MPCC::publishSplineTrajectory(void)
+void MPCC::publishGlobalSplineTrajectory(void)
 {
 	spline_traj_.header.stamp = ros::Time::now();
 	spline_traj_.header.frame_id = controller_config_->tracking_frame_;
@@ -1139,7 +1139,7 @@ void MPCC::publishSplineTrajectory(void)
 	spline_traj_pub_.publish(spline_traj_);
 }
 
-void MPCC::publishAnaliticSplineTrajectory(void)
+void MPCC::publishLocalSplineTrajectory(void)
 {
 	spline_traj2_.header.stamp = ros::Time::now();
 	spline_traj2_.header.frame_id = controller_config_->tracking_frame_;
