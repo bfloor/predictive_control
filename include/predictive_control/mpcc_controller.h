@@ -218,15 +218,15 @@ public:
     double lag_error_;
 
 	//Spline trajectory generation
-	tk::spline ref_path_x, ref_path_y, collision_radii_;
+	tk::spline ref_path_x, ref_path_y;
 
 	//MPCC Implementation
-	std::vector<double> X_road, Y_road, Theta_road;
-    double dist_spline_pts_;
+	std::vector<double> X_global, Y_global, Theta_global;
     double total_length_;
     std::vector<double> ss,xx,yy,vv;
     int n_clothoid, n_pts, N_local, n_traj_per_cloth, n_cloth_segments,n_pts_all ;
     //Search window parameters
+    double s0_;
     double window_size_;
     int n_search_points_;
     bool goal_reached_;
