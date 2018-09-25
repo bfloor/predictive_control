@@ -480,7 +480,7 @@ Visualization Manager:
       Marker Topic: /visualize_ellipses_array
       Name: MarkerArray
       Namespaces:
-        {}
+        "": true
       Queue Size: 100
       Value: true
     - Class: rviz/MarkerArray
@@ -515,22 +515,22 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 12.613
+      Distance: 17.2647
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.06
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 1.52687
-        Y: 1.08225
-        Z: -3.7375
+        X: 4.1635
+        Y: 2.28795
+        Z: -4.18393
       Name: Current View
       Near Clip Distance: 0.01
-      Pitch: 1.4248
+      Pitch: 1.2648
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 3.0754
+      Yaw: 5.6504
     Saved: ~
 Window Geometry:
   Displays:
@@ -552,5 +552,5 @@ Window Geometry:
   Views:
     collapsed: true
   Width: 1920
-  X: 0
+  X: 1920
   Y: 24

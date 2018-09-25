@@ -398,6 +398,8 @@ void MPCC::runNode(const ros::TimerEvent &event)
 		    }
         }
 
+        ComputeCollisionFreeArea();
+
 //        ROS_INFO_STREAM("traj_i: " << traj_i);
 //        ROS_INFO_STREAM("ss_length: " << ss.size());
 
@@ -503,6 +505,7 @@ void MPCC::runNode(const ros::TimerEvent &event)
 
         publishPredictedTrajectory();
 		publishPredictedCollisionSpace();
+        publishPosConstraint();
 		publishPredictedOutput();
 		publishLocalSplineTrajectory();
 		broadcastPathPose();
@@ -770,6 +773,16 @@ void MPCC::moveitGoalCB()
             acadoVariables.od[(ACADO_NOD * N_iter) + 39] = 0; //x_discs_[1];                        // position of the car discs
         }
 
+        if (map_service_.call(map_srv_))
+        {
+            ROS_ERROR("Service GetMap succeeded.");
+            environment_grid_ = map_srv_.response.map;
+        }
+        else
+        {
+            ROS_ERROR("Service GetMap failed.");
+        }
+
         traj_i = 0;
 
 		goal_reached_ = false;
@@ -778,8 +791,154 @@ void MPCC::moveitGoalCB()
         InitLocalRefPath();
 		publishLocalSplineTrajectory();
         publishGlobalPlan();
+
+		ComputeCollisionFreeArea();
     }
 }
+
+void MPCC::ComputeCollisionFreeArea()
+{
+    acado_timer t;
+    acado_tic( &t );
+
+    int x_path_i, y_path_i;
+    double x_path, y_path, theta_search, r;
+
+    int search_steps = 10;
+
+    collision_free_r_min_ = collision_free_r_max_;
+
+//    ROS_INFO_STREAM("ss[traj_i] = " << ss[traj_i] << " ss[traj_i + 1] = " << ss[traj_i + 1] << " ss[traj_i + 2] = " << ss[traj_i + 2]);
+
+    // Iterate over points in prediction horizon to search for collision free circles
+    for (int N_it = 0; N_it < ACADO_N; N_it++)
+    {
+
+        // Current search point of prediction horizon
+        x_path = acadoVariables.x[N_it * ACADO_NX + 0];
+        y_path = acadoVariables.x[N_it * ACADO_NX + 1];
+
+        // Find corresponding index of the point in the occupancy grid map
+        x_path_i = (int) round((x_path - environment_grid_.info.origin.position.x)/environment_grid_.info.resolution);
+        y_path_i = (int) round((y_path - environment_grid_.info.origin.position.y)/environment_grid_.info.resolution);
+
+        // Compute radius to closest occupied grid cell
+        r = searchRadius(x_path_i,y_path_i);
+
+        // Assign center and radius of collision free circle to vector of the whole prediction horizon
+        collision_free_R_[N_it] = r;
+        collision_free_X_[N_it] = x_path;
+        collision_free_Y_[N_it] = y_path;
+
+        // Keep track of the minimum collision free radius in the current prediction horizon
+        if (r < collision_free_r_min_)
+        {
+            collision_free_r_min_ = r;
+//            ROS_INFO_STREAM("Minimum r = " << r);
+        }
+
+
+    }
+
+//    for (int i=0; i<ACADO_N; i++){
+//        ROS_INFO_STREAM("circle_x: " << collision_free_X_[i] << " circle_y: " << collision_free_Y_[i] << " circle_r: " << collision_free_R_[i]);
+//    }
+
+    te_collison_free_ = acado_toc(&t);
+    ROS_INFO_STREAM("Free space solve time " << te_collison_free_ * 1e6 << " us");
+}
+
+double MPCC::searchRadius(int x_i, int y_i)
+{
+
+    double r = collision_free_r_max_, r_ = 0;
+    int search_radius = 1;
+
+    // declare search iterators
+    int search_x_it, search_y_it;
+
+    // Search until an occupied region is found or until the maximum radius is obtained
+    while (r == collision_free_r_max_ && search_radius < collision_free_r_max_/environment_grid_.info.resolution)
+    {
+
+        for (int search_x_it = -search_radius; search_x_it <= search_radius; search_x_it++ ) {
+
+            if (x_i + search_x_it < 0){search_x_it = -x_i;}
+            if (x_i + search_x_it > environment_grid_.info.width){search_x_it = environment_grid_.info.width - x_i;}
+
+            search_y_it = -search_radius;
+            if (y_i + search_y_it < 0){search_y_it = -y_i;}
+            if (getOccupancy(x_i + search_x_it,y_i + search_y_it) > occupied_)
+            {
+                r_ = sqrt(pow(search_x_it,2) + pow(search_y_it,2))*environment_grid_.info.resolution;
+
+                if (r_ < r)
+                {
+                    r = r_;
+                }
+
+            }
+
+            search_y_it = search_radius;
+            if (y_i + search_y_it > environment_grid_.info.height){search_y_it = environment_grid_.info.height - y_i;}
+            if (getOccupancy(x_i + search_x_it,y_i + search_y_it) > occupied_)
+            {
+                r_ = sqrt(pow(search_x_it,2) + pow(search_y_it,2))*environment_grid_.info.resolution;
+
+                if (r_ < r)
+                {
+                    r = r_;
+                }
+
+            }
+        }
+
+        for (int search_y_it = -search_radius; search_y_it <= search_radius; search_y_it++ ) {
+
+            if (y_i + search_y_it < 0){search_y_it = -y_i;}
+            if (y_i + search_y_it > environment_grid_.info.height){search_y_it = environment_grid_.info.height - y_i;}
+
+            search_x_it = -search_radius;
+            if (x_i + search_x_it < 0){search_x_it = -x_i;}
+            if (getOccupancy(x_i + search_x_it,y_i + search_y_it) > occupied_)
+            {
+                r_ = sqrt(pow(search_x_it,2) + pow(search_y_it,2))*environment_grid_.info.resolution;
+
+                if (r_ < r)
+                {
+                    r = r_;
+                }
+
+            }
+
+            search_x_it = search_radius;
+            if (x_i + search_x_it > environment_grid_.info.width){search_x_it = environment_grid_.info.width - x_i;}
+            if (getOccupancy(x_i + search_x_it,y_i + search_y_it) > occupied_)
+            {
+                r_ = sqrt(pow(search_x_it,2) + pow(search_y_it,2))*environment_grid_.info.resolution;
+
+                if (r_ < r)
+                {
+                    r = r_;
+                }
+
+            }
+        }
+
+        // Increase search radius
+        search_radius++;
+//        std::cout << "search radius: " << search_radius << std::endl;
+    }
+
+    return r;
+}
+
+int MPCC::getOccupancy(int x_i, int y_i)
+{
+    return environment_grid_.data[environment_grid_.info.width*y_i + x_i];
+
+}
+
 
 void MPCC::executeTrajectory(const moveit_msgs::RobotTrajectory & traj){
 
@@ -1000,6 +1159,28 @@ void MPCC::publishContourError(void){
     errors.data[1] = lag_error_;
 
     contour_error_pub_.publish(errors);
+}
+
+void MPCC::publishPosConstraint(){
+
+    visualization_msgs::MarkerArray collision_free;
+
+    for (int i = 0; i < ACADO_N; i++)
+    {
+        ellips2.scale.x = collision_free_R_[i]*2.0;
+        ellips2.scale.y = collision_free_R_[i]*2.0;
+        ellips2.pose.position.x = acadoVariables.x[i * ACADO_NX + 0];
+        ellips2.pose.position.y = acadoVariables.x[i * ACADO_NX + 1];
+
+        ellips2.id = 400+i;
+        ellips2.pose.orientation.x = 0;
+        ellips2.pose.orientation.y = 0;
+        ellips2.pose.orientation.z = 0;
+        ellips2.pose.orientation.w = 1;
+        collision_free.markers.push_back(ellips2);
+    }
+
+    collision_free_pub_.publish(collision_free);
 }
 
 void MPCC::publishFeedback(int& it, double& time)
