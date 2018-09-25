@@ -371,10 +371,12 @@ void MPCC::runNode(const ros::TimerEvent &event)
         acadoVariables.x[1] = current_state_(1);
         acadoVariables.x[2] = current_state_(2);
         acadoVariables.x[4] = 0.0000001;          //dummy state
+        acadoVariables.x[5] = 0.0000001;          //dummy state
 
         acadoVariables.u[0] = controlled_velocity_.linear.x;
         acadoVariables.u[1] = controlled_velocity_.angular.z;
         acadoVariables.u[2] = 0.0000001;           //slack variable
+        acadoVariables.u[3] = 0.0000001;           //slack variable
 
 		if(acadoVariables.x[3] > ss[2]) {
 
@@ -473,13 +475,20 @@ void MPCC::runNode(const ros::TimerEvent &event)
             acadoVariables.od[(ACADO_NOD * N_iter) + 47] = obstacles_.Obstacles[1].pose.orientation.z;   // heading of obstacle 2
             acadoVariables.od[(ACADO_NOD * N_iter) + 48] = obstacles_.Obstacles[1].major_semiaxis;       // major semiaxis of obstacle 2
             acadoVariables.od[(ACADO_NOD * N_iter) + 49] = obstacles_.Obstacles[1].minor_semiaxis;       // minor semiaxis of obstacle 2
-    }
+              
+			// Set radii for collision free circles on static environment
+            acadoVariables.od[(ACADO_NOD * N_iter) + 50] = collision_free_R_[N_iter];
+            acadoVariables.od[(ACADO_NOD * N_iter) + 51] = collision_free_X_[N_iter];
+            acadoVariables.od[(ACADO_NOD * N_iter) + 52] = collision_free_Y_[N_iter];
+
+}
 
         acadoVariables.x0[ 0 ] = current_state_(0);
         acadoVariables.x0[ 1 ] = current_state_(1);
         acadoVariables.x0[ 2 ] = current_state_(2);
 		acadoVariables.x0[ 3 ] = acadoVariables.x[3];
         acadoVariables.x0[ 4 ] = 0.0000001;             //dummy state
+        acadoVariables.x0[ 5 ] = 0.0000001;             //dummy state
 
         acado_preparationStep();
 
@@ -811,7 +820,7 @@ void MPCC::ComputeCollisionFreeArea()
 //    ROS_INFO_STREAM("ss[traj_i] = " << ss[traj_i] << " ss[traj_i + 1] = " << ss[traj_i + 1] << " ss[traj_i + 2] = " << ss[traj_i + 2]);
 
     // Iterate over points in prediction horizon to search for collision free circles
-    for (int N_it = 0; N_it < ACADO_N; N_it++)
+    for (int N_it = 1; N_it < ACADO_N; N_it++)
     {
 
         // Current search point of prediction horizon
@@ -822,13 +831,15 @@ void MPCC::ComputeCollisionFreeArea()
         x_path_i = (int) round((x_path - environment_grid_.info.origin.position.x)/environment_grid_.info.resolution);
         y_path_i = (int) round((y_path - environment_grid_.info.origin.position.y)/environment_grid_.info.resolution);
 
+//        ROS_INFO_STREAM("Search around x = " << x_path << ", y = " << y_path);
+
         // Compute radius to closest occupied grid cell
         r = searchRadius(x_path_i,y_path_i);
 
         // Assign center and radius of collision free circle to vector of the whole prediction horizon
-        collision_free_R_[N_it] = r;
-        collision_free_X_[N_it] = x_path;
-        collision_free_Y_[N_it] = y_path;
+        collision_free_R_[N_it - 1] = r;
+        collision_free_X_[N_it - 1] = x_path;
+        collision_free_Y_[N_it - 1] = y_path;
 
         // Keep track of the minimum collision free radius in the current prediction horizon
         if (r < collision_free_r_min_)
@@ -837,12 +848,31 @@ void MPCC::ComputeCollisionFreeArea()
 //            ROS_INFO_STREAM("Minimum r = " << r);
         }
 
-
     }
 
-//    for (int i=0; i<ACADO_N; i++){
-//        ROS_INFO_STREAM("circle_x: " << collision_free_X_[i] << " circle_y: " << collision_free_Y_[i] << " circle_r: " << collision_free_R_[i]);
-//    }
+    // Current search point of prediction horizon
+    x_path = acadoVariables.x[(ACADO_N - 1) * ACADO_NX + 0] + (acadoVariables.x[(ACADO_N - 1) * ACADO_NX + 0] - acadoVariables.x[(ACADO_N - 2) * ACADO_NX + 0]);
+    y_path = acadoVariables.x[(ACADO_N - 1) * ACADO_NX + 1] + (acadoVariables.x[(ACADO_N - 1) * ACADO_NX + 1] - acadoVariables.x[(ACADO_N - 2) * ACADO_NX + 1]);
+
+//    ROS_INFO_STREAM("Search around x = " << x_path << ", y = " << y_path);
+
+    // Find corresponding index of the point in the occupancy grid map
+    x_path_i = (int) round((x_path - environment_grid_.info.origin.position.x)/environment_grid_.info.resolution);
+    y_path_i = (int) round((y_path - environment_grid_.info.origin.position.y)/environment_grid_.info.resolution);
+
+//    ROS_INFO_STREAM("Search around x = " << x_path << ", y = " << y_path);
+
+    // Compute radius to closest occupied grid cell
+    r = searchRadius(x_path_i,y_path_i);
+
+    // Assign center and radius of collision free circle to vector of the whole prediction horizon
+    collision_free_R_[ACADO_N - 1] = r;
+    collision_free_X_[ACADO_N - 1] = x_path;
+    collision_free_Y_[ACADO_N - 1] = y_path;
+
+    for (int i=0; i<ACADO_N; i++){
+        ROS_INFO_STREAM("circle_x: " << collision_free_X_[i] << " circle_y: " << collision_free_Y_[i] << " circle_r: " << collision_free_R_[i]);
+    }
 
     te_collison_free_ = acado_toc(&t);
     ROS_INFO_STREAM("Free space solve time " << te_collison_free_ * 1e6 << " us");
