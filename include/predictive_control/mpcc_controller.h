@@ -383,7 +383,7 @@ private:
 
     void UpdateLocalRefPath();
 
- /**
+     /**
      * @brief ComputeCollisionFreeArea: Compute the collision free are around the prediction horizon, approximated by circles located at each discretization step
      */
     void ComputeCollisionFreeArea();
@@ -393,7 +393,7 @@ private:
      * @param x_i: Index of grid cell in x direction
      * @param y_i: Index of grid cell in y direction
      */
-    std::vector<double> computeConstraint(int x_i, int y_i, int N);
+    std::vector<double> computeConstraint(int x_i, int y_i, double psi_path, int N);
 
     /**
      * @brief getOccupancy: Returns the occupancy cell value at specified index
@@ -408,7 +408,9 @@ private:
      * @param y_i: Index of grid cell in y direction
      * @param psi: Rotation of the map
      */
-    int getRotatedOccupancy(int x_i, int y_i, double psi);
+    int getRotatedOccupancy(int x_i, int search_x, int y_i, int search_y, double psi);
+
+    void ZRotToQuat(geometry_msgs::Pose& pose);
 
     /**
      * @brief publishPosConstraint: Publish the approximated collision free area as a markerarray

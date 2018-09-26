@@ -44,10 +44,16 @@ reference_velocity: 0.5
 #      theta: [0, 0, 0, 1.5708, 1.5708, 1.5708, 3.1416, 3.1416, 3.1416]
 #      n_poly_per_clothoid: 2
 
+#global_path:
+#      x: [0, 2, 4, 6, 8, 10, 12, 14, 16]
+#      y: [0, 0, 0, 0, 0, 0, 0, 0, 0]
+#      theta: [0, 0, 0, 0, 0, 0, 0, 0, 0]
+#      n_poly_per_clothoid: 2
+
 global_path:
-      x: [0, 2, 4, 6, 8, 10, 12, 14, 16]
-      y: [0, 0, 0, 0, 0, 0, 0, 0, 0]
-      theta: [0, 0, 0, 0, 0, 0, 0, 0, 0]
+      x: [0, 2, 4, 6, 8, 10, 11, 13]
+      y: [0, 0, 0, 0, 0, 0, -1, -2]
+      theta: [0, 0, 0, 0, 0, 0, -1.5708, 0]
       n_poly_per_clothoid: 2
 
 # Parameters for collision constraints

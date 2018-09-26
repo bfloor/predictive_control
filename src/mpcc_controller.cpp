@@ -836,7 +836,7 @@ void MPCC::ComputeCollisionFreeArea()
     acado_tic( &t );
 
     int x_path_i, y_path_i;
-    double x_path, y_path, theta_search, r;
+    double x_path, y_path, psi_path, theta_search, r;
     std::vector<double> C_N;
 
     int search_steps = 10;
@@ -850,6 +850,7 @@ void MPCC::ComputeCollisionFreeArea()
         // Current search point of prediction horizon
         x_path = acadoVariables.x[N_it * ACADO_NX + 0];
         y_path = acadoVariables.x[N_it * ACADO_NX + 1];
+        psi_path = acadoVariables.x[N_it * ACADO_NX + 2];
 
         // Assign current position in prediction horizon to vector
         collision_free_X_[N_it] = x_path;
@@ -860,7 +861,13 @@ void MPCC::ComputeCollisionFreeArea()
         y_path_i = (int) round((y_path - environment_grid_.info.origin.position.y)/environment_grid_.info.resolution);
 
         // Compute the constraint
-        C_N = computeConstraint(x_path_i,y_path_i, N_it);
+        C_N = computeConstraint(x_path_i,y_path_i, psi_path, N_it);
+
+//        if (N_it == ACADO_N - 1)
+//        {
+//            ROS_INFO_STREAM("---------------------------------------------------------------------------");
+//            ROS_INFO_STREAM("Searching last rectangle at x = " << x_path << " y = " << y_path << " psi = " << psi_path);
+//        }
 
     }
 
@@ -868,7 +875,8 @@ void MPCC::ComputeCollisionFreeArea()
     ROS_INFO_STREAM("Free space solve time " << te_collision_free_ * 1e6 << " us");
 }
 
-std::vector<double> MPCC::computeConstraint(int x_i, int y_i, int N) {
+std::vector<double> MPCC::computeConstraint(int x_i, int y_i, double psi_path, int N)
+{
     // Initialize output constraints
     std::vector<double> computedConstraint;
 
@@ -909,7 +917,8 @@ std::vector<double> MPCC::computeConstraint(int x_i, int y_i, int N) {
                 if (y_i + search_y_it > environment_grid_.info.height){search_y_it = environment_grid_.info.height - y_i;}
                 if (y_i + search_y_it < 0){search_y_it = -y_i;}
                 // Assign value if occupied cell is found
-                if (getOccupancy(x_i + search_x, y_i + search_y_it) > occupied_)
+//                if (getOccupancy(x_i + search_x, y_i + search_y_it) > occupied_)
+                if (getRotatedOccupancy(x_i, search_x, y_i, search_y_it, psi_path) > occupied_)
                 {
                     x_min = search_x;
                 }
@@ -926,7 +935,8 @@ std::vector<double> MPCC::computeConstraint(int x_i, int y_i, int N) {
                 if (y_i + search_y_it > environment_grid_.info.height){search_y_it = environment_grid_.info.height - y_i;}
                 if (y_i + search_y_it < 0){search_y_it = -y_i;}
                 // Assign value if occupied cell is found
-                if (getOccupancy(x_i + search_x, y_i + search_y_it) > occupied_)
+//              if (getOccupancy(x_i + search_x, y_i + search_y_it) > occupied_)
+                if (getRotatedOccupancy(x_i, search_x, y_i, search_y_it, psi_path) > occupied_)
                 {
                     x_max = search_x;
                 }
@@ -943,7 +953,8 @@ std::vector<double> MPCC::computeConstraint(int x_i, int y_i, int N) {
                 if (x_i + search_x_it > environment_grid_.info.width){search_x_it = environment_grid_.info.width - x_i;}
                 if (x_i + search_x_it < 0){search_x_it = -x_i;}
                 // Assign value if occupied cell is found
-                if (getOccupancy(x_i + search_x_it, y_i + search_y) > occupied_)
+//                if (getOccupancy(x_i + search_x_it, y_i + search_y) > occupied_)
+                if (getRotatedOccupancy(x_i, search_x_it, y_i, search_y, psi_path) > occupied_)
                 {
                     y_min = search_y;
                 }
@@ -960,7 +971,8 @@ std::vector<double> MPCC::computeConstraint(int x_i, int y_i, int N) {
                 if (x_i + search_x_it > environment_grid_.info.width){search_x_it = environment_grid_.info.width - x_i;}
                 if (x_i + search_x_it < 0){search_x_it = -x_i;}
                 // Assign value if occupied cell is found
-                if (getOccupancy(x_i + search_x_it, y_i + search_y) > occupied_)
+//                if (getOccupancy(x_i + search_x_it, y_i + search_y) > occupied_)
+                if (getRotatedOccupancy(x_i, search_x_it, y_i, search_y, psi_path) > occupied_)
                 {
                     y_max = search_y;
                 }
@@ -979,6 +991,15 @@ std::vector<double> MPCC::computeConstraint(int x_i, int y_i, int N) {
     collision_free_ymin[N] = y_min*environment_grid_.info.resolution + 0.35;
     collision_free_ymax[N] = y_max*environment_grid_.info.resolution - 0.35;
 
+//    if (N == ACADO_N - 1)
+//    {
+//        ROS_INFO_STREAM("x_i = " << x_i << " y_i = " << y_i << " psi = " << psi_path);
+//        ROS_INFO_STREAM("xmin_i = " << x_min << " x_max_i = " << x_max << " ymin_i = " << y_min << " y_max_i = " << y_max);
+//        ROS_INFO_STREAM("xmin = " << collision_free_xmin[N] << " x_max = " << collision_free_xmax[N] << " ymin = " << collision_free_ymin[N] << " y_max = " << collision_free_ymax[N]);
+//        ROS_INFO_STREAM("xmin_R = " << collision_free_xmin[N] << " xmax_R = " << collision_free_xmax[N] << " ymin_R = " << collision_free_ymin[N] << " ymax_R = " << collision_free_ymax[N]);
+//    }
+
+
 //    ROS_INFO_STREAM("xi = " << x_i << " yi = " << y_i );
 //    ROS_INFO_STREAM("xmin = " << collision_free_xmin[N] << " x_max = " << collision_free_xmax[N] << " ymin = " << collision_free_ymin[N] << " y_max = " << collision_free_ymax[N] );
 
@@ -990,15 +1011,14 @@ std::vector<double> MPCC::computeConstraint(int x_i, int y_i, int N) {
 int MPCC::getOccupancy(int x_i, int y_i)
 {
     return environment_grid_.data[environment_grid_.info.width*y_i + x_i];
-
 }
 
-int MPCC::getRotatedOccupancy(int x_i, int y_i, double psi)
+int MPCC::getRotatedOccupancy(int x_i, int search_x, int y_i, int search_y, double psi)
 {
-    int x_i_rotated = (int) round(cos(psi)*x_i - sin(psi)*y_i);
-    int y_i_rotated = (int) round(sin(psi)*x_i + cos(psi)*y_i);
+    int x_search_rotated = (int) round(cos(psi)*search_x - sin(psi)*search_y);
+    int y_search_rotated = (int) round(sin(psi)*search_x + cos(psi)*search_y);
 
-    return environment_grid_.data[environment_grid_.info.width*y_i_rotated + x_i_rotated];
+    return environment_grid_.data[environment_grid_.info.width*(y_i + y_search_rotated) + (x_i + x_search_rotated)];
 }
 
 
@@ -1174,7 +1194,6 @@ void MPCC::publishPredictedCollisionSpace(void)
 {
 	visualization_msgs::MarkerArray collision_space;
 
-
 	for (int i = 0; i < ACADO_N; i++)
 	{
 		ellips1.id = 60+i;
@@ -1223,38 +1242,39 @@ void MPCC::publishContourError(void){
     contour_error_pub_.publish(errors);
 }
 
+void MPCC::ZRotToQuat(geometry_msgs::Pose& pose)
+{
+    pose.orientation.w = cos(pose.orientation.z * 0.5);
+    pose.orientation.x = 0;
+    pose.orientation.y = 0;
+    pose.orientation.z = sin(pose.orientation.z * 0.5);
+}
+
 void MPCC::publishPosConstraint(){
 
     visualization_msgs::MarkerArray collision_free;
-
-//    for (int i = 0; i < ACADO_N; i++)
-//    {
-//        ellips2.scale.x = collision_free_R_[i]*2.0;
-//        ellips2.scale.y = collision_free_R_[i]*2.0;
-//        ellips2.pose.position.x = acadoVariables.x[i * ACADO_NX + 0];
-//        ellips2.pose.position.y = acadoVariables.x[i * ACADO_NX + 1];
-//
-//        ellips2.id = 400+i;
-//        ellips2.pose.orientation.x = 0;
-//        ellips2.pose.orientation.y = 0;
-//        ellips2.pose.orientation.z = 0;
-//        ellips2.pose.orientation.w = 1;
-//        collision_free.markers.push_back(ellips2);
-//    }
+    double x_center, y_center;
 
     for (int i = 0; i < ACADO_N; i++)
     {
         cube1.scale.x = -collision_free_xmin[i] + collision_free_xmax[i];
         cube1.scale.y = -collision_free_ymin[i] + collision_free_ymax[i];
         cube1.scale.z = 0.01;
-        cube1.pose.position.x = acadoVariables.x[i * ACADO_NX + 0] + collision_free_xmax[i] - (-collision_free_xmin[i] + collision_free_xmax[i])/2;
-        cube1.pose.position.y = acadoVariables.x[i * ACADO_NX + 1] + collision_free_ymax[i] - (-collision_free_ymin[i] + collision_free_ymax[i])/2;
+
+        // Find the center of the collision free area to be able to draw it properly
+        x_center = collision_free_xmax[i] - (-collision_free_xmin[i] + collision_free_xmax[i])/2;
+        y_center = collision_free_ymax[i] - (-collision_free_ymin[i] + collision_free_ymax[i])/2;
+
+        // Assign center of cube
+        cube1.pose.position.x = acadoVariables.x[i * ACADO_NX + 0] + cos(acadoVariables.x[i * ACADO_NX + 2])*x_center - sin(acadoVariables.x[i * ACADO_NX + 2])*y_center;
+        cube1.pose.position.y = acadoVariables.x[i * ACADO_NX + 1] + sin(acadoVariables.x[i * ACADO_NX + 2])*x_center + cos(acadoVariables.x[i * ACADO_NX + 2])*y_center;
 
         cube1.id = 400+i;
         cube1.pose.orientation.x = 0;
         cube1.pose.orientation.y = 0;
-        cube1.pose.orientation.z = 0;
+        cube1.pose.orientation.z = acadoVariables.x[i * ACADO_NX + 2];
         cube1.pose.orientation.w = 1;
+        ZRotToQuat(cube1.pose);
         collision_free.markers.push_back(cube1);
     }
 
