@@ -210,7 +210,7 @@ public:
 	bool enable_output_;
 	int n_iterations_;
 	bool simulation_mode_;
-    real_t te_, te_collison_free_;
+    real_t te_, te_collision_free_;
 
 	tf2_ros::TransformBroadcaster state_pub_, path_pose_pub_;
 	std_msgs::Float64 cost_;
@@ -234,7 +234,7 @@ public:
     bool loop_mode_;
     int occupied_;
     double collision_free_r_max_, collision_free_r_min_;
-    std::vector<double> collision_free_R_, collision_free_X_, collision_free_Y_;
+    std::vector<double> collision_free_R_, collision_free_X_, collision_free_Y_, collision_free_C1, collision_free_C2, collision_free_C3, collision_free_C4, collision_free_xmin, collision_free_xmax, collision_free_ymin, collision_free_ymax;
 
 private:
 
@@ -289,7 +289,7 @@ private:
 	int idx, idy;
 	double epsilon_;
 
-	visualization_msgs::Marker ellips1, ellips2, global_plan;
+	visualization_msgs::Marker ellips1, ellips2, cube1, global_plan;
 
     // Kinematic variables
 	//To be done kinematic model car
@@ -393,6 +393,9 @@ private:
      * @param x_i: Index of grid cell in x direction
      * @param y_i: Index of grid cell in y direction
      */
+
+    std::vector<double> computeConstraint(int x_i, int y_i, int N);
+
     double searchRadius(int x_i, int y_i);
 
     /**

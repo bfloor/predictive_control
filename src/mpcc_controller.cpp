@@ -202,6 +202,17 @@ bool MPCC::initialize()
         ellips2.scale.y = 1.0*2.0;
         ellips2.scale.z = 0.05;
 
+        cube1.type = visualization_msgs::Marker::CUBE;
+        cube1.id = 60;
+        cube1.color.r = 0.5;
+        cube1.color.g = 0.5;
+        cube1.color.b = 0.0;
+        cube1.color.a = 0.1;
+        cube1.header.frame_id = controller_config_->tracking_frame_;
+        cube1.ns = "trajectory";
+        cube1.action = visualization_msgs::Marker::ADD;
+        cube1.lifetime = ros::Duration(0.1);
+
         global_plan.type = visualization_msgs::Marker::CYLINDER;
         global_plan.id = 800;
         global_plan.color.r = 0.8;
@@ -211,7 +222,7 @@ bool MPCC::initialize()
         global_plan.header.frame_id = controller_config_->tracking_frame_;
         global_plan.ns = "trajectory";
         global_plan.action = visualization_msgs::Marker::ADD;
-        global_plan.lifetime = ros::Duration(1000);
+        global_plan.lifetime = ros::Duration(0);
         global_plan.scale.x = 0.1;
         global_plan.scale.y = 0.1;
         global_plan.scale.z = 0.05;
@@ -229,7 +240,17 @@ bool MPCC::initialize()
         collision_free_X_.resize(ACADO_N);
         collision_free_Y_.resize(ACADO_N);
 
-        collision_free_r_max_ = 5;
+        collision_free_C1.resize(ACADO_N);
+        collision_free_C2.resize(ACADO_N);
+        collision_free_C3.resize(ACADO_N);
+        collision_free_C4.resize(ACADO_N);
+
+        collision_free_xmin.resize(ACADO_N);
+        collision_free_xmax.resize(ACADO_N);
+        collision_free_ymin.resize(ACADO_N);
+        collision_free_ymax.resize(ACADO_N);
+
+        collision_free_r_max_ = 2;
         occupied_ = 50;
 
 		// Check if all reference vectors are of the same length
@@ -477,10 +498,14 @@ void MPCC::runNode(const ros::TimerEvent &event)
             acadoVariables.od[(ACADO_NOD * N_iter) + 49] = obstacles_.Obstacles[1].minor_semiaxis;       // minor semiaxis of obstacle 2
               
 			// Set radii for collision free circles on static environment
-            acadoVariables.od[(ACADO_NOD * N_iter) + 50] = collision_free_R_[N_iter];
+            acadoVariables.od[(ACADO_NOD * N_iter) + 50] = 30; collision_free_R_[N_iter];
             acadoVariables.od[(ACADO_NOD * N_iter) + 51] = collision_free_X_[N_iter];
             acadoVariables.od[(ACADO_NOD * N_iter) + 52] = collision_free_Y_[N_iter];
 
+            acadoVariables.od[(ACADO_NOD * N_iter) + 53] = collision_free_xmin[N_iter];
+            acadoVariables.od[(ACADO_NOD * N_iter) + 54] = collision_free_xmax[N_iter];
+            acadoVariables.od[(ACADO_NOD * N_iter) + 55] = collision_free_ymin[N_iter];
+            acadoVariables.od[(ACADO_NOD * N_iter) + 56] = collision_free_ymax[N_iter];
 }
 
         acadoVariables.x0[ 0 ] = current_state_(0);
@@ -812,6 +837,7 @@ void MPCC::ComputeCollisionFreeArea()
 
     int x_path_i, y_path_i;
     double x_path, y_path, theta_search, r;
+    std::vector<double> C_N;
 
     int search_steps = 10;
 
@@ -820,62 +846,243 @@ void MPCC::ComputeCollisionFreeArea()
 //    ROS_INFO_STREAM("ss[traj_i] = " << ss[traj_i] << " ss[traj_i + 1] = " << ss[traj_i + 1] << " ss[traj_i + 2] = " << ss[traj_i + 2]);
 
     // Iterate over points in prediction horizon to search for collision free circles
-    for (int N_it = 1; N_it < ACADO_N; N_it++)
+    for (int N_it = 0; N_it < ACADO_N; N_it++)
     {
 
         // Current search point of prediction horizon
         x_path = acadoVariables.x[N_it * ACADO_NX + 0];
         y_path = acadoVariables.x[N_it * ACADO_NX + 1];
 
+        collision_free_X_[N_it] = x_path;
+        collision_free_Y_[N_it] = y_path;
+
         // Find corresponding index of the point in the occupancy grid map
         x_path_i = (int) round((x_path - environment_grid_.info.origin.position.x)/environment_grid_.info.resolution);
         y_path_i = (int) round((y_path - environment_grid_.info.origin.position.y)/environment_grid_.info.resolution);
 
+        C_N = computeConstraint(x_path_i,y_path_i, N_it);
+
+
 //        ROS_INFO_STREAM("Search around x = " << x_path << ", y = " << y_path);
 
         // Compute radius to closest occupied grid cell
-        r = searchRadius(x_path_i,y_path_i);
+//        r = searchRadius(x_path_i,y_path_i);
 
         // Assign center and radius of collision free circle to vector of the whole prediction horizon
-        collision_free_R_[N_it - 1] = r;
-        collision_free_X_[N_it - 1] = x_path;
-        collision_free_Y_[N_it - 1] = y_path;
+//        collision_free_R_[N_it] = r;
+//        collision_free_X_[N_it] = x_path;
+//        collision_free_Y_[N_it] = y_path;
 
         // Keep track of the minimum collision free radius in the current prediction horizon
-        if (r < collision_free_r_min_)
-        {
-            collision_free_r_min_ = r;
+//        if (r < collision_free_r_min_)
+//        {
+//            collision_free_r_min_ = r;
 //            ROS_INFO_STREAM("Minimum r = " << r);
-        }
+//        }
 
     }
 
-    // Current search point of prediction horizon
-    x_path = acadoVariables.x[(ACADO_N - 1) * ACADO_NX + 0] + (acadoVariables.x[(ACADO_N - 1) * ACADO_NX + 0] - acadoVariables.x[(ACADO_N - 2) * ACADO_NX + 0]);
-    y_path = acadoVariables.x[(ACADO_N - 1) * ACADO_NX + 1] + (acadoVariables.x[(ACADO_N - 1) * ACADO_NX + 1] - acadoVariables.x[(ACADO_N - 2) * ACADO_NX + 1]);
+//    for (int i=0; i<ACADO_N; i++){
+//        ROS_INFO_STREAM("circle_x: " << collision_free_X_[i] << " circle_y: " << collision_free_Y_[i] << " circle_r: " << collision_free_R_[i]);
+//    }
 
-//    ROS_INFO_STREAM("Search around x = " << x_path << ", y = " << y_path);
+    te_collision_free_ = acado_toc(&t);
+    ROS_INFO_STREAM("Free space solve time " << te_collision_free_ * 1e6 << " us");
+}
 
-    // Find corresponding index of the point in the occupancy grid map
-    x_path_i = (int) round((x_path - environment_grid_.info.origin.position.x)/environment_grid_.info.resolution);
-    y_path_i = (int) round((y_path - environment_grid_.info.origin.position.y)/environment_grid_.info.resolution);
+std::vector<double> MPCC::computeConstraint(int x_i, int y_i, int N) {
+    // Initialize output constraints
+    std::vector<double> computedConstraint;
 
-//    ROS_INFO_STREAM("Search around x = " << x_path << ", y = " << y_path);
+    std::vector<double> t1(2, 0), t2(2, 0), t3(2, 0), t4(2, 0);
+    std::vector<double> a1(2, 0), a2(2, 0), a3(2, 0), a4(2, 0);
 
-    // Compute radius to closest occupied grid cell
-    r = searchRadius(x_path_i,y_path_i);
+    // Declare search iterators
+//    double x_min, x_max, y_min, y_max;
+    int x_min, x_max, y_min, y_max;
+    int r_max_i_min, r_max_i_max;
 
-    // Assign center and radius of collision free circle to vector of the whole prediction horizon
-    collision_free_R_[ACADO_N - 1] = r;
-    collision_free_X_[ACADO_N - 1] = x_path;
-    collision_free_Y_[ACADO_N - 1] = y_path;
+    r_max_i_min = (int) round(-collision_free_r_max_ /environment_grid_.info.resolution);
+    r_max_i_max = (int) round(collision_free_r_max_/environment_grid_.info.resolution);
+//    ROS_INFO_STREAM("r_max_i_min = " << r_max_i_min << " r_max_i_max = " << r_max_i_max );
 
-    for (int i=0; i<ACADO_N; i++){
-        ROS_INFO_STREAM("circle_x: " << collision_free_X_[i] << " circle_y: " << collision_free_Y_[i] << " circle_r: " << collision_free_R_[i]);
+    x_min = r_max_i_min;
+    x_max = r_max_i_max;
+    y_min = r_max_i_min;
+    y_max = r_max_i_max;
+
+//    x_min = -collision_free_r_max_;
+//    x_max = collision_free_r_max_;
+//    y_min = -collision_free_r_max_;
+//    y_max = collision_free_r_max_;
+
+//    ROS_INFO_STREAM("xmin = " << x_min << " x_max = " << x_max << " ymin = " << y_min << " y_max = " << y_max);
+
+    // Initialize search distance iterator
+    int search_distance = 1;
+    // Initialize boolean that indicates whether the region has been found
+    bool search_region = true;
+    int search_x, search_y;
+
+    // Iterate until the region is found
+    while (search_region)
+    {
+        // Only search in x_min direction if no value has been found yet
+        if (x_min == r_max_i_min)
+        {
+            search_x = -search_distance;
+            for (int search_y_it = std::max(-search_distance,y_min); search_y_it < std::min(search_distance,y_max); search_y_it++)
+            {
+                if (y_i + search_y_it > environment_grid_.info.height){search_y_it = environment_grid_.info.height - y_i;}
+                if (y_i + search_y_it < 0){search_y_it = -y_i;}
+                if (getOccupancy(x_i + search_x, y_i + search_y_it) > occupied_)
+                {
+                    x_min = search_x;
+                }
+            }
+        } //else {ROS_INFO_STREAM("Already found x_min = " << x_min);}
+
+        // Only search in x_max direction if no value has been found yet
+        if (x_max == r_max_i_max)
+        {
+            search_x = search_distance;
+            for (int search_y_it = std::max(-search_distance,y_min); search_y_it < std::min(search_distance,y_max); search_y_it++)
+            {
+                if (y_i + search_y_it > environment_grid_.info.height){search_y_it = environment_grid_.info.height - y_i;}
+                if (y_i + search_y_it < 0){search_y_it = -y_i;}
+                if (getOccupancy(x_i + search_x, y_i + search_y_it) > occupied_)
+                {
+                    x_max = search_x;
+                }
+            }
+        } //else {ROS_INFO_STREAM("Already found x_max = " << x_max);}
+
+        // Only search in y_min direction if no value has been found yet
+        if (y_min == r_max_i_min)
+        {
+            search_y = -search_distance;
+            for (int search_x_it = std::max(-search_distance,x_min); search_x_it < std::min(search_distance,x_max); search_x_it++)
+            {
+                if (x_i + search_x_it > environment_grid_.info.width){search_x_it = environment_grid_.info.width - x_i;}
+                if (x_i + search_x_it < 0){search_x_it = -x_i;}
+                if (getOccupancy(x_i + search_x_it, y_i + search_y) > occupied_)
+                {
+                    y_min = search_y;
+                }
+            }
+        } //else {ROS_INFO_STREAM("Already found y_min = " << y_min);}
+
+        // Only search in y_max direction if no value has been found yet
+        if (y_max == r_max_i_max)
+        {
+            search_y = search_distance;
+            for (int search_x_it = std::max(-search_distance,x_min); search_x_it < std::min(search_distance,x_max); search_x_it++)
+            {
+                if (x_i + search_x_it > environment_grid_.info.width){search_x_it = environment_grid_.info.width - x_i;}
+                if (x_i + search_x_it < 0){search_x_it = -x_i;}
+                if (getOccupancy(x_i + search_x_it, y_i + search_y) > occupied_)
+                {
+                    y_max = search_y;
+                }
+            }
+        } //else {ROS_INFO_STREAM("Already found y_max = " << y_max);}
+
+        search_distance++;
+        search_region = (search_distance < r_max_i_max) && ( x_min == r_max_i_min || x_max == r_max_i_max || y_min == r_max_i_min || y_max == r_max_i_max );
     }
 
-    te_collison_free_ = acado_toc(&t);
-    ROS_INFO_STREAM("Free space solve time " << te_collison_free_ * 1e6 << " us");
+    collision_free_xmin[N] = x_min*environment_grid_.info.resolution + 0.35;
+    collision_free_xmax[N] = x_max*environment_grid_.info.resolution - 0.35;
+    collision_free_ymin[N] = y_min*environment_grid_.info.resolution + 0.35;
+    collision_free_ymax[N] = y_max*environment_grid_.info.resolution - 0.35;
+
+//    ROS_INFO_STREAM("xi = " << x_i << " yi = " << y_i );
+//    ROS_INFO_STREAM("xmin = " << collision_free_xmin[N] << " x_max = " << collision_free_xmax[N] << " ymin = " << collision_free_ymin[N] << " y_max = " << collision_free_ymax[N] );
+
+    // Return the computed constraint
+    return computedConstraint;
+
+//    while ( y_min == -collision_free_r_max_ && search_distance < collision_free_r_max_/environment_grid_.info.resolution )
+//    {
+////        ROS_INFO_STREAM(search_distance);
+//        if (y_i - search_distance < 0){y_min = -y_i*environment_grid_.info.resolution;}
+//        if (getOccupancy(x_i, y_i - search_distance) > occupied_)
+//            {
+//                y_min = -search_distance*environment_grid_.info.resolution;
+//            }
+//
+//        search_distance++;
+//    }
+//
+//    search_distance = 1;
+//
+//    while ( y_max == collision_free_r_max_ && search_distance < collision_free_r_max_/environment_grid_.info.resolution )
+//    {
+//        if (y_i + search_distance > environment_grid_.info.height){y_max = (environment_grid_.info.height - y_i)*environment_grid_.info.resolution;}
+//        if (getOccupancy(x_i, y_i + search_distance) > occupied_)
+//        {
+//            y_max = search_distance*environment_grid_.info.resolution;
+//        }
+//
+//        search_distance++;
+//    }
+
+
+//    while (( y_min == -collision_free_r_max_|| x_min == -collision_free_r_max_ || y_max == collision_free_r_max_ ||x_max == collision_free_r_max_) && search_distance < collision_free_r_max_/environment_grid_.info.resolution)
+//    {
+////        ROS_INFO_STREAM("Search distance: " << search_distance);
+//        for (int search_x_it = std::max(-search_distance,x_min); search_x_it <= std::min(search_distance,x_max); search_x_it++ )
+//        {
+//            if (x_i + search_x_it > environment_grid_.info.width){search_x_it = environment_grid_.info.width - x_i;}
+//            if (x_i + search_x_it < 0){search_x_it = -x_i;}
+//
+//            search_y_it = -search_distance;
+//            if (y_i - search_distance < 0){y_min = -y_i*environment_grid_.info.resolution;}
+//            if (getOccupancy(x_i, y_i - search_distance) > occupied_)
+//            {
+//                y_min = -search_distance*environment_grid_.info.resolution;
+//            }
+//
+//            search_y_it = search_distance;
+//            if (y_i + search_y_it > environment_grid_.info.height){search_y_it = environment_grid_.info.height - y_i;}
+//            if (getOccupancy(x_i + search_x_it,y_i + search_y_it) > occupied_)
+//            if (getOccupancy(x_i, y_i + search_distance) > occupied_)
+//            {
+//                y_max = search_distance*environment_grid_.info.resolution;
+//            }
+//        }
+//
+//        for (int search_y_it = std::max(-search_distance,y_min); search_y_it <= std::min(search_distance,y_max); search_y_it++ ) {
+//
+//            if (y_i + search_y_it < 0){search_y_it = -y_i;}
+//            if (y_i + search_y_it > environment_grid_.info.height){search_y_it = environment_grid_.info.height - y_i;}
+//
+//            search_x_it = -search_distance;
+//            if (x_i + search_x_it < 0){search_x_it = -x_i;}
+//            if (getOccupancy(x_i + search_x_it,y_i + search_y_it) > occupied_)
+//            {
+//                if (search_x_it < x_min)
+//                {
+//                    x_min = search_x_it;
+//                }
+//
+//            }
+//
+//            search_x_it = search_distance;
+//            if (x_i + search_x_it > environment_grid_.info.width){search_x_it = environment_grid_.info.width - x_i;}
+//            if (getOccupancy(x_i + search_x_it,y_i + search_y_it) > occupied_)
+//            {
+//                if (search_x_it < x_max)
+//                {
+//                    x_max = search_x_it;
+//                }
+//
+//            }
+//        }
+//
+//        search_distance++;
+//    }
+
 }
 
 double MPCC::searchRadius(int x_i, int y_i)
@@ -959,6 +1166,8 @@ double MPCC::searchRadius(int x_i, int y_i)
         search_radius++;
 //        std::cout << "search radius: " << search_radius << std::endl;
     }
+
+
 
     return r;
 }
@@ -1195,19 +1404,35 @@ void MPCC::publishPosConstraint(){
 
     visualization_msgs::MarkerArray collision_free;
 
+//    for (int i = 0; i < ACADO_N; i++)
+//    {
+//        ellips2.scale.x = collision_free_R_[i]*2.0;
+//        ellips2.scale.y = collision_free_R_[i]*2.0;
+//        ellips2.pose.position.x = acadoVariables.x[i * ACADO_NX + 0];
+//        ellips2.pose.position.y = acadoVariables.x[i * ACADO_NX + 1];
+//
+//        ellips2.id = 400+i;
+//        ellips2.pose.orientation.x = 0;
+//        ellips2.pose.orientation.y = 0;
+//        ellips2.pose.orientation.z = 0;
+//        ellips2.pose.orientation.w = 1;
+//        collision_free.markers.push_back(ellips2);
+//    }
+
     for (int i = 0; i < ACADO_N; i++)
     {
-        ellips2.scale.x = collision_free_R_[i]*2.0;
-        ellips2.scale.y = collision_free_R_[i]*2.0;
-        ellips2.pose.position.x = acadoVariables.x[i * ACADO_NX + 0];
-        ellips2.pose.position.y = acadoVariables.x[i * ACADO_NX + 1];
+        cube1.scale.x = -collision_free_xmin[i] + collision_free_xmax[i];
+        cube1.scale.y = -collision_free_ymin[i] + collision_free_ymax[i];
+        cube1.scale.z = 0.01;
+        cube1.pose.position.x = acadoVariables.x[i * ACADO_NX + 0] + collision_free_xmax[i] - (-collision_free_xmin[i] + collision_free_xmax[i])/2;
+        cube1.pose.position.y = acadoVariables.x[i * ACADO_NX + 1] + collision_free_ymax[i] - (-collision_free_ymin[i] + collision_free_ymax[i])/2;
 
-        ellips2.id = 400+i;
-        ellips2.pose.orientation.x = 0;
-        ellips2.pose.orientation.y = 0;
-        ellips2.pose.orientation.z = 0;
-        ellips2.pose.orientation.w = 1;
-        collision_free.markers.push_back(ellips2);
+        cube1.id = 400+i;
+        cube1.pose.orientation.x = 0;
+        cube1.pose.orientation.y = 0;
+        cube1.pose.orientation.z = 0;
+        cube1.pose.orientation.w = 1;
+        collision_free.markers.push_back(cube1);
     }
 
     collision_free_pub_.publish(collision_free);
@@ -1224,7 +1449,7 @@ void MPCC::publishFeedback(int& it, double& time)
     feedback_msg.cost = cost_.data;
     feedback_msg.iterations = it;
     feedback_msg.computation_time = time;
-    feedback_msg.freespace_time = te_collison_free_;
+    feedback_msg.freespace_time = te_collision_free_;
     feedback_msg.kkt = acado_getKKT();
 
     feedback_msg.wC = cost_contour_weight_factors_(0);       // weight factor on contour error
