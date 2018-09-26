@@ -843,8 +843,6 @@ void MPCC::ComputeCollisionFreeArea()
 
     collision_free_r_min_ = collision_free_r_max_;
 
-//    ROS_INFO_STREAM("ss[traj_i] = " << ss[traj_i] << " ss[traj_i + 1] = " << ss[traj_i + 1] << " ss[traj_i + 2] = " << ss[traj_i + 2]);
-
     // Iterate over points in prediction horizon to search for collision free circles
     for (int N_it = 0; N_it < ACADO_N; N_it++)
     {
@@ -853,6 +851,7 @@ void MPCC::ComputeCollisionFreeArea()
         x_path = acadoVariables.x[N_it * ACADO_NX + 0];
         y_path = acadoVariables.x[N_it * ACADO_NX + 1];
 
+        // Assign current position in prediction horizon to vector
         collision_free_X_[N_it] = x_path;
         collision_free_Y_[N_it] = y_path;
 
@@ -860,31 +859,10 @@ void MPCC::ComputeCollisionFreeArea()
         x_path_i = (int) round((x_path - environment_grid_.info.origin.position.x)/environment_grid_.info.resolution);
         y_path_i = (int) round((y_path - environment_grid_.info.origin.position.y)/environment_grid_.info.resolution);
 
+        // Compute the constraint
         C_N = computeConstraint(x_path_i,y_path_i, N_it);
 
-
-//        ROS_INFO_STREAM("Search around x = " << x_path << ", y = " << y_path);
-
-        // Compute radius to closest occupied grid cell
-//        r = searchRadius(x_path_i,y_path_i);
-
-        // Assign center and radius of collision free circle to vector of the whole prediction horizon
-//        collision_free_R_[N_it] = r;
-//        collision_free_X_[N_it] = x_path;
-//        collision_free_Y_[N_it] = y_path;
-
-        // Keep track of the minimum collision free radius in the current prediction horizon
-//        if (r < collision_free_r_min_)
-//        {
-//            collision_free_r_min_ = r;
-//            ROS_INFO_STREAM("Minimum r = " << r);
-//        }
-
     }
-
-//    for (int i=0; i<ACADO_N; i++){
-//        ROS_INFO_STREAM("circle_x: " << collision_free_X_[i] << " circle_y: " << collision_free_Y_[i] << " circle_r: " << collision_free_R_[i]);
-//    }
 
     te_collision_free_ = acado_toc(&t);
     ROS_INFO_STREAM("Free space solve time " << te_collision_free_ * 1e6 << " us");
@@ -894,35 +872,29 @@ std::vector<double> MPCC::computeConstraint(int x_i, int y_i, int N) {
     // Initialize output constraints
     std::vector<double> computedConstraint;
 
+    // Initialize linear constraint normal vectors
     std::vector<double> t1(2, 0), t2(2, 0), t3(2, 0), t4(2, 0);
     std::vector<double> a1(2, 0), a2(2, 0), a3(2, 0), a4(2, 0);
 
     // Declare search iterators
-//    double x_min, x_max, y_min, y_max;
     int x_min, x_max, y_min, y_max;
+    int search_x, search_y;
     int r_max_i_min, r_max_i_max;
 
+    // define maximum search distance in occupancy grid cells, based on discretization
     r_max_i_min = (int) round(-collision_free_r_max_ /environment_grid_.info.resolution);
     r_max_i_max = (int) round(collision_free_r_max_/environment_grid_.info.resolution);
-//    ROS_INFO_STREAM("r_max_i_min = " << r_max_i_min << " r_max_i_max = " << r_max_i_max );
 
+    // Initialize found rectabgle values with maxium search distance
     x_min = r_max_i_min;
     x_max = r_max_i_max;
     y_min = r_max_i_min;
     y_max = r_max_i_max;
 
-//    x_min = -collision_free_r_max_;
-//    x_max = collision_free_r_max_;
-//    y_min = -collision_free_r_max_;
-//    y_max = collision_free_r_max_;
-
-//    ROS_INFO_STREAM("xmin = " << x_min << " x_max = " << x_max << " ymin = " << y_min << " y_max = " << y_max);
-
     // Initialize search distance iterator
     int search_distance = 1;
     // Initialize boolean that indicates whether the region has been found
     bool search_region = true;
-    int search_x, search_y;
 
     // Iterate until the region is found
     while (search_region)
@@ -933,8 +905,10 @@ std::vector<double> MPCC::computeConstraint(int x_i, int y_i, int N) {
             search_x = -search_distance;
             for (int search_y_it = std::max(-search_distance,y_min); search_y_it < std::min(search_distance,y_max); search_y_it++)
             {
+                // Correct search iterator if out of map bounds
                 if (y_i + search_y_it > environment_grid_.info.height){search_y_it = environment_grid_.info.height - y_i;}
                 if (y_i + search_y_it < 0){search_y_it = -y_i;}
+                // Assign value if occupied cell is found
                 if (getOccupancy(x_i + search_x, y_i + search_y_it) > occupied_)
                 {
                     x_min = search_x;
@@ -948,8 +922,10 @@ std::vector<double> MPCC::computeConstraint(int x_i, int y_i, int N) {
             search_x = search_distance;
             for (int search_y_it = std::max(-search_distance,y_min); search_y_it < std::min(search_distance,y_max); search_y_it++)
             {
+                // Correct search iterator if out of map bounds
                 if (y_i + search_y_it > environment_grid_.info.height){search_y_it = environment_grid_.info.height - y_i;}
                 if (y_i + search_y_it < 0){search_y_it = -y_i;}
+                // Assign value if occupied cell is found
                 if (getOccupancy(x_i + search_x, y_i + search_y_it) > occupied_)
                 {
                     x_max = search_x;
@@ -963,8 +939,10 @@ std::vector<double> MPCC::computeConstraint(int x_i, int y_i, int N) {
             search_y = -search_distance;
             for (int search_x_it = std::max(-search_distance,x_min); search_x_it < std::min(search_distance,x_max); search_x_it++)
             {
+                // Correct search iterator if out of map bounds
                 if (x_i + search_x_it > environment_grid_.info.width){search_x_it = environment_grid_.info.width - x_i;}
                 if (x_i + search_x_it < 0){search_x_it = -x_i;}
+                // Assign value if occupied cell is found
                 if (getOccupancy(x_i + search_x_it, y_i + search_y) > occupied_)
                 {
                     y_min = search_y;
@@ -978,8 +956,10 @@ std::vector<double> MPCC::computeConstraint(int x_i, int y_i, int N) {
             search_y = search_distance;
             for (int search_x_it = std::max(-search_distance,x_min); search_x_it < std::min(search_distance,x_max); search_x_it++)
             {
+                // Correct search iterator if out of map bounds
                 if (x_i + search_x_it > environment_grid_.info.width){search_x_it = environment_grid_.info.width - x_i;}
                 if (x_i + search_x_it < 0){search_x_it = -x_i;}
+                // Assign value if occupied cell is found
                 if (getOccupancy(x_i + search_x_it, y_i + search_y) > occupied_)
                 {
                     y_max = search_y;
@@ -987,10 +967,13 @@ std::vector<double> MPCC::computeConstraint(int x_i, int y_i, int N) {
             }
         } //else {ROS_INFO_STREAM("Already found y_max = " << y_max);}
 
+        // Increase search distance
         search_distance++;
+        // Determine whether the search is finished
         search_region = (search_distance < r_max_i_max) && ( x_min == r_max_i_min || x_max == r_max_i_max || y_min == r_max_i_min || y_max == r_max_i_max );
     }
 
+    // Assign the rectangle values
     collision_free_xmin[N] = x_min*environment_grid_.info.resolution + 0.35;
     collision_free_xmax[N] = x_max*environment_grid_.info.resolution - 0.35;
     collision_free_ymin[N] = y_min*environment_grid_.info.resolution + 0.35;
@@ -1001,181 +984,21 @@ std::vector<double> MPCC::computeConstraint(int x_i, int y_i, int N) {
 
     // Return the computed constraint
     return computedConstraint;
-
-//    while ( y_min == -collision_free_r_max_ && search_distance < collision_free_r_max_/environment_grid_.info.resolution )
-//    {
-////        ROS_INFO_STREAM(search_distance);
-//        if (y_i - search_distance < 0){y_min = -y_i*environment_grid_.info.resolution;}
-//        if (getOccupancy(x_i, y_i - search_distance) > occupied_)
-//            {
-//                y_min = -search_distance*environment_grid_.info.resolution;
-//            }
-//
-//        search_distance++;
-//    }
-//
-//    search_distance = 1;
-//
-//    while ( y_max == collision_free_r_max_ && search_distance < collision_free_r_max_/environment_grid_.info.resolution )
-//    {
-//        if (y_i + search_distance > environment_grid_.info.height){y_max = (environment_grid_.info.height - y_i)*environment_grid_.info.resolution;}
-//        if (getOccupancy(x_i, y_i + search_distance) > occupied_)
-//        {
-//            y_max = search_distance*environment_grid_.info.resolution;
-//        }
-//
-//        search_distance++;
-//    }
-
-
-//    while (( y_min == -collision_free_r_max_|| x_min == -collision_free_r_max_ || y_max == collision_free_r_max_ ||x_max == collision_free_r_max_) && search_distance < collision_free_r_max_/environment_grid_.info.resolution)
-//    {
-////        ROS_INFO_STREAM("Search distance: " << search_distance);
-//        for (int search_x_it = std::max(-search_distance,x_min); search_x_it <= std::min(search_distance,x_max); search_x_it++ )
-//        {
-//            if (x_i + search_x_it > environment_grid_.info.width){search_x_it = environment_grid_.info.width - x_i;}
-//            if (x_i + search_x_it < 0){search_x_it = -x_i;}
-//
-//            search_y_it = -search_distance;
-//            if (y_i - search_distance < 0){y_min = -y_i*environment_grid_.info.resolution;}
-//            if (getOccupancy(x_i, y_i - search_distance) > occupied_)
-//            {
-//                y_min = -search_distance*environment_grid_.info.resolution;
-//            }
-//
-//            search_y_it = search_distance;
-//            if (y_i + search_y_it > environment_grid_.info.height){search_y_it = environment_grid_.info.height - y_i;}
-//            if (getOccupancy(x_i + search_x_it,y_i + search_y_it) > occupied_)
-//            if (getOccupancy(x_i, y_i + search_distance) > occupied_)
-//            {
-//                y_max = search_distance*environment_grid_.info.resolution;
-//            }
-//        }
-//
-//        for (int search_y_it = std::max(-search_distance,y_min); search_y_it <= std::min(search_distance,y_max); search_y_it++ ) {
-//
-//            if (y_i + search_y_it < 0){search_y_it = -y_i;}
-//            if (y_i + search_y_it > environment_grid_.info.height){search_y_it = environment_grid_.info.height - y_i;}
-//
-//            search_x_it = -search_distance;
-//            if (x_i + search_x_it < 0){search_x_it = -x_i;}
-//            if (getOccupancy(x_i + search_x_it,y_i + search_y_it) > occupied_)
-//            {
-//                if (search_x_it < x_min)
-//                {
-//                    x_min = search_x_it;
-//                }
-//
-//            }
-//
-//            search_x_it = search_distance;
-//            if (x_i + search_x_it > environment_grid_.info.width){search_x_it = environment_grid_.info.width - x_i;}
-//            if (getOccupancy(x_i + search_x_it,y_i + search_y_it) > occupied_)
-//            {
-//                if (search_x_it < x_max)
-//                {
-//                    x_max = search_x_it;
-//                }
-//
-//            }
-//        }
-//
-//        search_distance++;
-//    }
-
 }
 
-double MPCC::searchRadius(int x_i, int y_i)
-{
-
-    double r = collision_free_r_max_, r_ = 0;
-    int search_radius = 1;
-
-    // declare search iterators
-    int search_x_it, search_y_it;
-
-    // Search until an occupied region is found or until the maximum radius is obtained
-    while (r == collision_free_r_max_ && search_radius < collision_free_r_max_/environment_grid_.info.resolution)
-    {
-
-        for (int search_x_it = -search_radius; search_x_it <= search_radius; search_x_it++ ) {
-
-            if (x_i + search_x_it < 0){search_x_it = -x_i;}
-            if (x_i + search_x_it > environment_grid_.info.width){search_x_it = environment_grid_.info.width - x_i;}
-
-            search_y_it = -search_radius;
-            if (y_i + search_y_it < 0){search_y_it = -y_i;}
-            if (getOccupancy(x_i + search_x_it,y_i + search_y_it) > occupied_)
-            {
-                r_ = sqrt(pow(search_x_it,2) + pow(search_y_it,2))*environment_grid_.info.resolution;
-
-                if (r_ < r)
-                {
-                    r = r_;
-                }
-
-            }
-
-            search_y_it = search_radius;
-            if (y_i + search_y_it > environment_grid_.info.height){search_y_it = environment_grid_.info.height - y_i;}
-            if (getOccupancy(x_i + search_x_it,y_i + search_y_it) > occupied_)
-            {
-                r_ = sqrt(pow(search_x_it,2) + pow(search_y_it,2))*environment_grid_.info.resolution;
-
-                if (r_ < r)
-                {
-                    r = r_;
-                }
-
-            }
-        }
-
-        for (int search_y_it = -search_radius; search_y_it <= search_radius; search_y_it++ ) {
-
-            if (y_i + search_y_it < 0){search_y_it = -y_i;}
-            if (y_i + search_y_it > environment_grid_.info.height){search_y_it = environment_grid_.info.height - y_i;}
-
-            search_x_it = -search_radius;
-            if (x_i + search_x_it < 0){search_x_it = -x_i;}
-            if (getOccupancy(x_i + search_x_it,y_i + search_y_it) > occupied_)
-            {
-                r_ = sqrt(pow(search_x_it,2) + pow(search_y_it,2))*environment_grid_.info.resolution;
-
-                if (r_ < r)
-                {
-                    r = r_;
-                }
-
-            }
-
-            search_x_it = search_radius;
-            if (x_i + search_x_it > environment_grid_.info.width){search_x_it = environment_grid_.info.width - x_i;}
-            if (getOccupancy(x_i + search_x_it,y_i + search_y_it) > occupied_)
-            {
-                r_ = sqrt(pow(search_x_it,2) + pow(search_y_it,2))*environment_grid_.info.resolution;
-
-                if (r_ < r)
-                {
-                    r = r_;
-                }
-
-            }
-        }
-
-        // Increase search radius
-        search_radius++;
-//        std::cout << "search radius: " << search_radius << std::endl;
-    }
-
-
-
-    return r;
-}
 
 int MPCC::getOccupancy(int x_i, int y_i)
 {
     return environment_grid_.data[environment_grid_.info.width*y_i + x_i];
 
+}
+
+int MPCC::getRotatedOccupancy(int x_i, int y_i, double psi)
+{
+    int x_i_rotated = (int) round(cos(psi)*x_i - sin(psi)*y_i);
+    int y_i_rotated = (int) round(sin(psi)*x_i + cos(psi)*y_i);
+
+    return environment_grid_.data[environment_grid_.info.width*y_i_rotated + x_i_rotated];
 }
 
 

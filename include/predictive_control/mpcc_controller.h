@@ -393,10 +393,7 @@ private:
      * @param x_i: Index of grid cell in x direction
      * @param y_i: Index of grid cell in y direction
      */
-
     std::vector<double> computeConstraint(int x_i, int y_i, int N);
-
-    double searchRadius(int x_i, int y_i);
 
     /**
      * @brief getOccupancy: Returns the occupancy cell value at specified index
@@ -404,6 +401,14 @@ private:
      * @param y_i: Index of grid cell in y direction
      */
     int getOccupancy(int x_i, int y_i);
+
+    /**
+     * @brief getRotatedOccupancy: Returns the occupancy cell value at specified index, for a rotated map
+     * @param x_i: Index of grid cell in x direction
+     * @param y_i: Index of grid cell in y direction
+     * @param psi: Rotation of the map
+     */
+    int getRotatedOccupancy(int x_i, int y_i, double psi);
 
     /**
      * @brief publishPosConstraint: Publish the approximated collision free area as a markerarray
