@@ -245,6 +245,15 @@ bool MPCC::initialize()
         collision_free_C3.resize(ACADO_N);
         collision_free_C4.resize(ACADO_N);
 
+        collision_free_a1x.resize(ACADO_N);
+        collision_free_a1y.resize(ACADO_N);
+        collision_free_a2x.resize(ACADO_N);
+        collision_free_a2y.resize(ACADO_N);
+        collision_free_a3x.resize(ACADO_N);
+        collision_free_a3y.resize(ACADO_N);
+        collision_free_a4x.resize(ACADO_N);
+        collision_free_a4y.resize(ACADO_N);
+
         collision_free_xmin.resize(ACADO_N);
         collision_free_xmax.resize(ACADO_N);
         collision_free_ymin.resize(ACADO_N);
@@ -506,6 +515,21 @@ void MPCC::runNode(const ros::TimerEvent &event)
             acadoVariables.od[(ACADO_NOD * N_iter) + 54] = collision_free_xmax[N_iter];
             acadoVariables.od[(ACADO_NOD * N_iter) + 55] = collision_free_ymin[N_iter];
             acadoVariables.od[(ACADO_NOD * N_iter) + 56] = collision_free_ymax[N_iter];
+
+            acadoVariables.od[(ACADO_NOD * N_iter) + 57] = collision_free_a1x[N_iter];
+            acadoVariables.od[(ACADO_NOD * N_iter) + 58] = collision_free_a2x[N_iter];
+            acadoVariables.od[(ACADO_NOD * N_iter) + 59] = collision_free_a3x[N_iter];
+            acadoVariables.od[(ACADO_NOD * N_iter) + 60] = collision_free_a4x[N_iter];
+
+            acadoVariables.od[(ACADO_NOD * N_iter) + 61] = collision_free_a1y[N_iter];
+            acadoVariables.od[(ACADO_NOD * N_iter) + 62] = collision_free_a2y[N_iter];
+            acadoVariables.od[(ACADO_NOD * N_iter) + 63] = collision_free_a3y[N_iter];
+            acadoVariables.od[(ACADO_NOD * N_iter) + 64] = collision_free_a4y[N_iter];
+
+            acadoVariables.od[(ACADO_NOD * N_iter) + 65] = collision_free_C1[N_iter];
+            acadoVariables.od[(ACADO_NOD * N_iter) + 66] = collision_free_C2[N_iter];
+            acadoVariables.od[(ACADO_NOD * N_iter) + 67] = collision_free_C3[N_iter];
+            acadoVariables.od[(ACADO_NOD * N_iter) + 68] = collision_free_C4[N_iter];
 }
 
         acadoVariables.x0[ 0 ] = current_state_(0);
@@ -861,7 +885,7 @@ void MPCC::ComputeCollisionFreeArea()
         y_path_i = (int) round((y_path - environment_grid_.info.origin.position.y)/environment_grid_.info.resolution);
 
         // Compute the constraint
-        C_N = computeConstraint(x_path_i,y_path_i, psi_path, N_it);
+        C_N = computeConstraint(x_path_i,y_path_i,x_path, y_path, psi_path, N_it);
 
 //        if (N_it == ACADO_N - 1)
 //        {
@@ -875,14 +899,13 @@ void MPCC::ComputeCollisionFreeArea()
     ROS_INFO_STREAM("Free space solve time " << te_collision_free_ * 1e6 << " us");
 }
 
-std::vector<double> MPCC::computeConstraint(int x_i, int y_i, double psi_path, int N)
+std::vector<double> MPCC::computeConstraint(int x_i, int y_i, double x_path, double y_path, double psi_path, int N)
 {
     // Initialize output constraints
     std::vector<double> computedConstraint;
 
     // Initialize linear constraint normal vectors
     std::vector<double> t1(2, 0), t2(2, 0), t3(2, 0), t4(2, 0);
-    std::vector<double> a1(2, 0), a2(2, 0), a3(2, 0), a4(2, 0);
 
     // Declare search iterators
     int x_min, x_max, y_min, y_max;
@@ -991,13 +1014,55 @@ std::vector<double> MPCC::computeConstraint(int x_i, int y_i, double psi_path, i
     collision_free_ymin[N] = y_min*environment_grid_.info.resolution + 0.35;
     collision_free_ymax[N] = y_max*environment_grid_.info.resolution - 0.35;
 
-//    if (N == ACADO_N - 1)
-//    {
-//        ROS_INFO_STREAM("x_i = " << x_i << " y_i = " << y_i << " psi = " << psi_path);
-//        ROS_INFO_STREAM("xmin_i = " << x_min << " x_max_i = " << x_max << " ymin_i = " << y_min << " y_max_i = " << y_max);
-//        ROS_INFO_STREAM("xmin = " << collision_free_xmin[N] << " x_max = " << collision_free_xmax[N] << " ymin = " << collision_free_ymin[N] << " y_max = " << collision_free_ymax[N]);
-//        ROS_INFO_STREAM("xmin_R = " << collision_free_xmin[N] << " xmax_R = " << collision_free_xmax[N] << " ymin_R = " << collision_free_ymin[N] << " ymax_R = " << collision_free_ymax[N]);
-//    }
+    std::vector<double> sqx(4,0), sqy(4,0);
+
+    sqx[0] = x_path + cos(psi_path)*collision_free_xmin[N] - sin(psi_path)*collision_free_ymin[N];
+    sqx[1] = x_path + cos(psi_path)*collision_free_xmin[N] - sin(psi_path)*collision_free_ymax[N];
+    sqx[2] = x_path + cos(psi_path)*collision_free_xmax[N] - sin(psi_path)*collision_free_ymax[N];
+    sqx[3] = x_path + cos(psi_path)*collision_free_xmax[N] - sin(psi_path)*collision_free_ymin[N];
+
+    sqy[0] = y_path + sin(psi_path)*collision_free_xmin[N] + cos(psi_path)*collision_free_ymin[N];
+    sqy[1] = y_path + sin(psi_path)*collision_free_xmin[N] + cos(psi_path)*collision_free_ymax[N];
+    sqy[2] = y_path + sin(psi_path)*collision_free_xmax[N] + cos(psi_path)*collision_free_ymax[N];
+    sqy[3] = y_path + sin(psi_path)*collision_free_xmax[N] + cos(psi_path)*collision_free_ymin[N];
+
+    t1[0] = (sqx[1] - sqx[0])/sqrt((sqx[1] - sqx[0])*(sqx[1] - sqx[0]) + (sqy[1] - sqy[0])*(sqy[1] - sqy[0]));
+    t2[0] = (sqx[2] - sqx[1])/sqrt((sqx[2] - sqx[1])*(sqx[2] - sqx[1]) + (sqy[2] - sqy[1])*(sqy[2] - sqy[1]));
+    t3[0] = (sqx[3] - sqx[2])/sqrt((sqx[3] - sqx[2])*(sqx[3] - sqx[2]) + (sqy[3] - sqy[2])*(sqy[3] - sqy[2]));
+    t4[0] = (sqx[0] - sqx[3])/sqrt((sqx[0] - sqx[3])*(sqx[0] - sqx[3]) + (sqy[0] - sqy[3])*(sqy[0] - sqy[3]));
+
+    t1[1] = (sqy[1] - sqy[0])/sqrt((sqx[1] - sqx[0])*(sqx[1] - sqx[0]) + (sqy[1] - sqy[0])*(sqy[1] - sqy[0]));
+    t2[1] = (sqy[2] - sqy[1])/sqrt((sqx[2] - sqx[1])*(sqx[2] - sqx[1]) + (sqy[2] - sqy[1])*(sqy[2] - sqy[1]));
+    t3[1] = (sqy[3] - sqy[2])/sqrt((sqx[3] - sqx[2])*(sqx[3] - sqx[2]) + (sqy[3] - sqy[2])*(sqy[3] - sqy[2]));
+    t4[1] = (sqy[0] - sqy[3])/sqrt((sqx[0] - sqx[3])*(sqx[0] - sqx[3]) + (sqy[0] - sqy[3])*(sqy[0] - sqy[3]));
+
+    collision_free_a1x[N] = t1[1];
+    collision_free_a2x[N] = t2[1];
+    collision_free_a3x[N] = t3[1];
+    collision_free_a4x[N] = t4[1];
+
+    collision_free_a1y[N] = -t1[0];
+    collision_free_a2y[N] = -t2[0];
+    collision_free_a3y[N] = -t3[0];
+    collision_free_a4y[N] = -t4[0];
+
+    collision_free_C1[N] = sqx[0]*collision_free_a1x[N] + sqy[0]*collision_free_a1y[N];
+    collision_free_C2[N] = sqx[1]*collision_free_a2x[N] + sqy[1]*collision_free_a2y[N];
+    collision_free_C3[N] = sqx[2]*collision_free_a3x[N] + sqy[2]*collision_free_a3y[N];
+    collision_free_C4[N] = sqx[3]*collision_free_a4x[N] + sqy[3]*collision_free_a4y[N];
+
+    if (N == ACADO_N - 1)
+    {
+        ROS_INFO_STREAM("x = " << x_path << " y = " << y_path << " psi = " << psi_path);
+        ROS_INFO_STREAM("x_i = " << x_i << " y_i = " << y_i);
+        ROS_INFO_STREAM("xmin_i = " << x_min << " x_max_i = " << x_max << " ymin_i = " << y_min << " y_max_i = " << y_max);
+        ROS_INFO_STREAM("xmin = " << collision_free_xmin[N] << " x_max = " << collision_free_xmax[N] << " ymin = " << collision_free_ymin[N] << " y_max = " << collision_free_ymax[N]);
+        ROS_INFO_STREAM("xmin_R = " << collision_free_xmin[N] << " xmax_R = " << collision_free_xmax[N] << " ymin_R = " << collision_free_ymin[N] << " ymax_R = " << collision_free_ymax[N]);
+        ROS_INFO_STREAM("sq[0] = [" << sqx[0] << ", " << sqy[0] << "], sq[1] = [" << sqx[1] << ", " << sqy[1] << "], sq[2] = [" << sqx[2] << ", " << sqy[2] << "], sq[3] = [" << sqx[3] << ", " << sqy[3] << "]" );
+        ROS_INFO_STREAM("t1 = [" << t1[0] << ", " << t1[1] << "], t2 = [" << t2[0] << ", " << t2[1] << "], t3 = [" << t3[0] << ", " << t3[1] << "], t4 = [" << t4[0] << ", " << t4[1] << "]" );
+        ROS_INFO_STREAM("collision_free_a1 = [" << collision_free_a1x[N] << ", " << collision_free_a1y[N] << "], collision_free_a2 = [" << collision_free_a2x[N] << ", " << collision_free_a2y[N] << "], collision_free_a3 = [" << collision_free_a3x[N] << ", " << collision_free_a3y[N] << "], collision_free_a4 = [" << collision_free_a4x[N] << ", " << collision_free_a4y[N] << "]" );
+        ROS_INFO_STREAM("collision_free_C1 = [" << collision_free_C1[N] << "], collision_free_C2 = [" << collision_free_C2[N] << "], collision_free_C3 = [" << collision_free_C3[N] << "], collision_free_C4 = [" << collision_free_C4[N] << "]" );
+    }
 
 
 //    ROS_INFO_STREAM("xi = " << x_i << " yi = " << y_i );

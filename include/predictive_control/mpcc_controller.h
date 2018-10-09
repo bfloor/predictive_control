@@ -234,7 +234,7 @@ public:
     bool loop_mode_;
     int occupied_;
     double collision_free_r_max_, collision_free_r_min_;
-    std::vector<double> collision_free_R_, collision_free_X_, collision_free_Y_, collision_free_C1, collision_free_C2, collision_free_C3, collision_free_C4, collision_free_xmin, collision_free_xmax, collision_free_ymin, collision_free_ymax;
+    std::vector<double> collision_free_R_, collision_free_X_, collision_free_Y_, collision_free_C1, collision_free_C2, collision_free_C3, collision_free_C4, collision_free_a1x ,collision_free_a1y, collision_free_a2x ,collision_free_a2y, collision_free_a3x ,collision_free_a3y, collision_free_a4x ,collision_free_a4y , collision_free_xmin, collision_free_xmax, collision_free_ymin, collision_free_ymax;
 
 private:
 
@@ -393,7 +393,7 @@ private:
      * @param x_i: Index of grid cell in x direction
      * @param y_i: Index of grid cell in y direction
      */
-    std::vector<double> computeConstraint(int x_i, int y_i, double psi_path, int N);
+    std::vector<double> computeConstraint(int x_i, int y_i, double x_path, double y_path, double psi_path, int N);
 
     /**
      * @brief getOccupancy: Returns the occupancy cell value at specified index

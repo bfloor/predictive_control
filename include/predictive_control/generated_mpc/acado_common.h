@@ -64,7 +64,7 @@ extern "C"
 /** Number of control/estimation intervals. */
 #define ACADO_N 25
 /** Number of online data values. */
-#define ACADO_NOD 57
+#define ACADO_NOD 69
 /** Number of path constraints. */
 #define ACADO_NPAC 6
 /** Number of control variables. */
@@ -118,11 +118,11 @@ real_t x[ 156 ];
  */
 real_t u[ 100 ];
 
-/** Matrix of size: 26 x 57 (row major format)
+/** Matrix of size: 26 x 69 (row major format)
  * 
  *  Matrix containing 26 online data vectors.
  */
-real_t od[ 1482 ];
+real_t od[ 1794 ];
 
 /** Column vector of size: 6
  * 
@@ -173,8 +173,8 @@ real_t rhs_aux[ 154 ];
 
 real_t rk_ttt;
 
-/** Row vector of size: 188 */
-real_t rk_xxx[ 188 ];
+/** Row vector of size: 200 */
+real_t rk_xxx[ 200 ];
 
 /** Matrix of size: 4 x 115 (row major format) */
 real_t rk_kkk[ 460 ];
@@ -185,8 +185,8 @@ real_t rk_sweep1[ 24 ];
 /** Row vector of size: 24 */
 real_t rk_sweep2[ 24 ];
 
-/** Row vector of size: 188 */
-real_t state[ 188 ];
+/** Row vector of size: 200 */
+real_t state[ 200 ];
 
 /** Column vector of size: 150 */
 real_t d[ 150 ];
@@ -203,8 +203,8 @@ real_t EH[ 2500 ];
 /** Column vector of size: 2589 */
 real_t objAuxVar[ 2589 ];
 
-/** Row vector of size: 67 */
-real_t objValueIn[ 67 ];
+/** Row vector of size: 79 */
+real_t objValueIn[ 79 ];
 
 /** Row vector of size: 87 */
 real_t objValueOut[ 87 ];
@@ -224,8 +224,8 @@ real_t QN1[ 36 ];
 /** Column vector of size: 207 */
 real_t conAuxVar[ 207 ];
 
-/** Row vector of size: 73 */
-real_t conValueIn[ 73 ];
+/** Row vector of size: 85 */
+real_t conValueIn[ 85 ];
 
 /** Row vector of size: 166 */
 real_t conValueOut[ 166 ];
