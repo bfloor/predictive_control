@@ -55,7 +55,6 @@
 #include <actionlib/client/simple_action_client.h>
 #include <predictive_control/moveAction.h>
 #include <predictive_control/moveActionGoal.h>
-//#include <predictive_control/collision_avoidance.h>
 
 // joint trajectory interface
 #include <control_msgs/FollowJointTrajectoryAction.h>
@@ -63,12 +62,6 @@
 #include <predictive_control/trajActionGoal.h>
 
 #include <nav_msgs/Path.h>
-#include <nav_msgs/OccupancyGrid.h>
-#include <nav_msgs/GetMap.h>
-
-// Add obstacle messages
-#include <obstacle_feed/Obstacle.h>
-#include <obstacle_feed/Obstacles.h>
 
 //Dynamic Reconfigure server
 #include <boost/thread/mutex.hpp>
@@ -128,8 +121,6 @@ public:
      */
     void StateCallBack(const geometry_msgs::Pose::ConstPtr& msg);
 
-    void ObstacleCallBack(const obstacle_feed::Obstacles& obstacles);
-
     /**
      * @brief controlSquence: Known as main control of all classes
      */
@@ -178,10 +169,6 @@ public:
         return eigen_vector;
     }
 
-    /** public data member */
-
-    ros::ServiceClient map_service_;
-
     // joint state subsciber to get current joint value
     ros::Subscriber robot_state_sub_;
 
@@ -193,17 +180,12 @@ public:
 
 	ros::Publisher joint_state_pub_;
 
-    // publishes error vector between tracking and target frame
-    ros::Publisher cartesian_error_pub_;
-
     // publish trajectory
-    ros::Publisher traj_pub_, tr_path_pub_, pred_traj_pub_, pred_cmd_pub_,cost_pub_,robot_collision_space_pub_, global_plan_pub_,local_spline_traj_pub1_, local_spline_traj_pub2_, local_spline_traj_pub3_, contour_error_pub_, feedback_pub_, collision_free_pub_;
+    ros::Publisher traj_pub_, tr_path_pub_, pred_traj_pub_, pred_cmd_pub_,cost_pub_, global_plan_pub_,local_spline_traj_pub1_, local_spline_traj_pub2_, local_spline_traj_pub3_, contour_error_pub_, feedback_pub_;
 	//Predicted trajectory
 	nav_msgs::Path pred_traj_;
 	nav_msgs::Path pred_cmd_;
 	nav_msgs::Path local_spline_traj1_,local_spline_traj2_,local_spline_traj3_;
-	nav_msgs::OccupancyGrid environment_grid_;
-    nav_msgs::GetMap map_srv_;
 
 	int traj_i;
 	//Controller options
@@ -232,9 +214,6 @@ public:
     bool goal_reached_;
     bool last_poly_;
     bool loop_mode_;
-    int occupied_;
-    double collision_free_r_max_, collision_free_r_min_;
-    std::vector<double> collision_free_R_, collision_free_X_, collision_free_Y_, collision_free_C1, collision_free_C2, collision_free_C3, collision_free_C4, collision_free_a1x ,collision_free_a1y, collision_free_a2x ,collision_free_a2y, collision_free_a3x ,collision_free_a3y, collision_free_a4x ,collision_free_a4y , collision_free_xmin, collision_free_xmax, collision_free_ymin, collision_free_ymax;
 
 private:
 
@@ -248,7 +227,6 @@ private:
     // Clock frequency
     double clock_frequency_;
 
-    double r_discs_;
     Eigen::VectorXd x_discs_;
 
     // Timmer
@@ -261,9 +239,6 @@ private:
     bool tracking_;
     std::string target_frame_;
 
-
-    // store pose value for visualize trajectory
-    //geometry_msgs::PoseArray traj_pose_array_;
     visualization_msgs::MarkerArray traj_marker_array_;
 
     // Distance between traget frame and tracking frame relative to base link
@@ -277,26 +252,17 @@ private:
     Eigen::VectorXd cost_contour_weight_factors_;
     Eigen::VectorXd cost_control_weight_factors_;
 
-    double slack_weight_;
-    double repulsive_weight_;
     double reference_velocity_;
 
 	//MoveIt TRAJECTORY VARIABLE
 	moveit_msgs::RobotTrajectory traj;
 
-	//TRajectory execution variables
+	//Trajectory execution variables
 	double next_point_dist, goal_dist, prev_point_dist;
 	int idx, idy;
 	double epsilon_;
 
-	visualization_msgs::Marker ellips1, ellips2, cube1, global_plan;
-
-    // Kinematic variables
-	//To be done kinematic model car
-
-    // Obstacles
-    obstacle_feed::Obstacles obstacles_;
-    obstacle_feed::Obstacles obstacles_init_;
+	visualization_msgs::Marker global_plan;
 
     // Current and last position and velocity from joint state callback
     //Eigen::VectorXd current_position_;
@@ -331,7 +297,6 @@ private:
      */
     void spinNode();
 
-    void computeEgoDiscs();
     /**
      * @brief runNode: Continue updating this function depend on clock frequency
      * @param event: Used for computation of duration of first and last event
@@ -348,7 +313,6 @@ private:
      */
     void publishErrorPose(const Eigen::VectorXd& error);
 
-
     void publishTrajectory(void);
 	/**
 	 * @brief publishPredictedTrajectory: publish predicted trajectory
@@ -361,13 +325,9 @@ private:
 
 	void publishPredictedOutput(void);
 
-	void publishPredictedCollisionSpace(void);
-
 	void publishCost(void);
 
     void publishContourError(void);
-
-//    void publishPathFromTrajectory(const moveit_msgs::RobotTrajectory& traj);
 
 	void broadcastTF();
 
@@ -382,40 +342,6 @@ private:
     void InitLocalRefPath();
 
     void UpdateLocalRefPath();
-
-     /**
-     * @brief ComputeCollisionFreeArea: Compute the collision free are around the prediction horizon, approximated by circles located at each discretization step
-     */
-    void ComputeCollisionFreeArea();
-
-    /**
-     * @brief searchRadius: Find the true radius from an occupancy grid index to the first occupied cell
-     * @param x_i: Index of grid cell in x direction
-     * @param y_i: Index of grid cell in y direction
-     */
-    std::vector<double> computeConstraint(int x_i, int y_i, double x_path, double y_path, double psi_path, int N);
-
-    /**
-     * @brief getOccupancy: Returns the occupancy cell value at specified index
-     * @param x_i: Index of grid cell in x direction
-     * @param y_i: Index of grid cell in y direction
-     */
-    int getOccupancy(int x_i, int y_i);
-
-    /**
-     * @brief getRotatedOccupancy: Returns the occupancy cell value at specified index, for a rotated map
-     * @param x_i: Index of grid cell in x direction
-     * @param y_i: Index of grid cell in y direction
-     * @param psi: Rotation of the map
-     */
-    int getRotatedOccupancy(int x_i, int search_x, int y_i, int search_y, double psi);
-
-    void ZRotToQuat(geometry_msgs::Pose& pose);
-
-    /**
-     * @brief publishPosConstraint: Publish the approximated collision free area as a markerarray
-     */
-    void publishPosConstraint();
 
     void publishFeedback(int& it, double& time);
 

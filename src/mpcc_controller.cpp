@@ -87,10 +87,6 @@ bool MPCC::initialize()
 
         robot_state_sub_ = nh.subscribe(controller_config_->robot_state_topic_, 1, &MPCC::StateCallBack, this);
 
-        obstacle_feed_sub_ = nh.subscribe(controller_config_->sub_ellipse_topic_, 1, &MPCC::ObstacleCallBack, this);
-
-        map_service_ = nh.serviceClient<nav_msgs::GetMap>("static_map");
-
         //Publishers
         traj_pub_ = nh.advertise<visualization_msgs::MarkerArray>("pd_trajectory",1);
 		pred_cmd_pub_ = nh.advertise<nav_msgs::Path>("predicted_cmd",1);
@@ -98,14 +94,12 @@ bool MPCC::initialize()
         contour_error_pub_ = nh.advertise<std_msgs::Float64MultiArray>("contour_error",1);
         controlled_velocity_pub_ = nh.advertise<geometry_msgs::Twist>(controller_config_->output_cmd,1);
 		joint_state_pub_ = nh.advertise<sensor_msgs::JointState>("/joint_states",1);
-		robot_collision_space_pub_ = nh.advertise<visualization_msgs::MarkerArray>("/robot_collision_space", 100);
         pred_traj_pub_ = nh.advertise<nav_msgs::Path>("predicted_trajectory",1);
 		global_plan_pub_ = nh.advertise<visualization_msgs::MarkerArray>("global_plan",1);
         local_spline_traj_pub1_ = nh.advertise<nav_msgs::Path>("reference_trajectory_seg1",1);
         local_spline_traj_pub2_ = nh.advertise<nav_msgs::Path>("reference_trajectory_seg2",1);
         local_spline_traj_pub3_ = nh.advertise<nav_msgs::Path>("reference_trajectory_seg3",1);
 		feedback_pub_ = nh.advertise<predictive_control::control_feedback>("controller_feedback",1);
-        collision_free_pub_ = nh.advertise<visualization_msgs::MarkerArray>("collision_free_circles",1);
 
 		ros::Duration(1).sleep();
 
@@ -144,8 +138,6 @@ bool MPCC::initialize()
         // initialize state and control weight factors
         cost_contour_weight_factors_ = transformStdVectorToEigenVector(controller_config_->contour_weight_factors_);
         cost_control_weight_factors_ = transformStdVectorToEigenVector(controller_config_->control_weight_factors_);
-        slack_weight_ = controller_config_->slack_weight_;
-        repulsive_weight_ = controller_config_->repulsive_weight_;
         reference_velocity_ = controller_config_->reference_velocity_;
 
         ros::NodeHandle nh_predictive("predictive_controller");
@@ -154,64 +146,10 @@ bool MPCC::initialize()
         reconfigure_server_.reset(new dynamic_reconfigure::Server<predictive_control::PredictiveControllerConfig>(reconfig_mutex_, nh_predictive));
         reconfigure_server_->setCallback(boost::bind(&MPCC::reconfigureCallback,   this, _1, _2));
 
-	    // Initialize obstacles
-        obstacle_feed::Obstacles obstacles;
-		obstacles.Obstacles.resize(controller_config_->n_obstacles_);
-        obstacles_.Obstacles.resize(controller_config_->n_obstacles_);
-		for (int obst_it = 0; obst_it < controller_config_->n_obstacles_; obst_it++)
-        {
-            obstacles.Obstacles[obst_it].pose.position.x = 1000;
-            obstacles.Obstacles[obst_it].pose.position.y = 1000;
-            obstacles.Obstacles[obst_it].pose.orientation.z = 0;
-            obstacles.Obstacles[obst_it].major_semiaxis = 0.001;
-            obstacles.Obstacles[obst_it].minor_semiaxis = 0.001;
-		}
-		obstacles_ = obstacles;
-
-		computeEgoDiscs();
-
 		//Controller options
 		enable_output_ = false;
 		n_iterations_ = 100;
 		simulation_mode_ = true;
-
-		//Plot variables
-		ellips1.type = visualization_msgs::Marker::CYLINDER;
-		ellips1.id = 60;
-		ellips1.color.b = 1.0;
-		ellips1.color.a = 0.5;
-		ellips1.header.frame_id = controller_config_->tracking_frame_;
-		ellips1.ns = "trajectory";
-		ellips1.action = visualization_msgs::Marker::ADD;
-		ellips1.lifetime = ros::Duration(0.1);
-		ellips1.scale.x = r_discs_*2.0;
-		ellips1.scale.y = r_discs_*2.0;
-		ellips1.scale.z = 0.05;
-
-        ellips2.type = visualization_msgs::Marker::CYLINDER;
-        ellips2.id = 400;
-        ellips2.color.r = 0.5;
-        ellips2.color.g = 0.5;
-        ellips2.color.b = 0.0;
-        ellips2.color.a = 0.1;
-        ellips2.header.frame_id = controller_config_->tracking_frame_;
-        ellips2.ns = "trajectory";
-        ellips2.action = visualization_msgs::Marker::ADD;
-        ellips2.lifetime = ros::Duration(0.1);
-        ellips2.scale.x = 1.0*2.0;
-        ellips2.scale.y = 1.0*2.0;
-        ellips2.scale.z = 0.05;
-
-        cube1.type = visualization_msgs::Marker::CUBE;
-        cube1.id = 60;
-        cube1.color.r = 0.5;
-        cube1.color.g = 0.5;
-        cube1.color.b = 0.0;
-        cube1.color.a = 0.1;
-        cube1.header.frame_id = controller_config_->tracking_frame_;
-        cube1.ns = "trajectory";
-        cube1.action = visualization_msgs::Marker::ADD;
-        cube1.lifetime = ros::Duration(0.1);
 
         global_plan.type = visualization_msgs::Marker::CYLINDER;
         global_plan.id = 800;
@@ -234,33 +172,6 @@ bool MPCC::initialize()
 		X_global.resize(controller_config_->ref_x_.size());
 		Y_global.resize(controller_config_->ref_y_.size());
 		Theta_global.resize(controller_config_->ref_theta_.size());
-
-        // Resize vector of collision free radii along prediction horizon
-        collision_free_R_.resize(ACADO_N);
-        collision_free_X_.resize(ACADO_N);
-        collision_free_Y_.resize(ACADO_N);
-
-        collision_free_C1.resize(ACADO_N);
-        collision_free_C2.resize(ACADO_N);
-        collision_free_C3.resize(ACADO_N);
-        collision_free_C4.resize(ACADO_N);
-
-        collision_free_a1x.resize(ACADO_N);
-        collision_free_a1y.resize(ACADO_N);
-        collision_free_a2x.resize(ACADO_N);
-        collision_free_a2y.resize(ACADO_N);
-        collision_free_a3x.resize(ACADO_N);
-        collision_free_a3y.resize(ACADO_N);
-        collision_free_a4x.resize(ACADO_N);
-        collision_free_a4y.resize(ACADO_N);
-
-        collision_free_xmin.resize(ACADO_N);
-        collision_free_xmax.resize(ACADO_N);
-        collision_free_ymin.resize(ACADO_N);
-        collision_free_ymax.resize(ACADO_N);
-
-        collision_free_r_max_ = 2;
-        occupied_ = 50;
 
 		// Check if all reference vectors are of the same length
 		if (!( (controller_config_->ref_x_.size() == controller_config_->ref_y_.size()) && ( controller_config_->ref_x_.size() == controller_config_->ref_theta_.size() ) && (controller_config_->ref_y_.size() == controller_config_->ref_theta_.size()) ))
@@ -288,12 +199,7 @@ void MPCC::reconfigureCallback(predictive_control::PredictiveControllerConfig& c
     cost_control_weight_factors_(0) = config.Kv;
     cost_control_weight_factors_(1) = config.Kw;
 
-    slack_weight_= config.Ws;
-    repulsive_weight_ = config.WR;
-
     reference_velocity_ = config.vRef;
-    collision_free_r_max_ = config.rMax;
-    occupied_ = config.occThres;
 
     enable_output_ = config.enable_output;
     loop_mode_ = config.loop_mode;
@@ -303,26 +209,6 @@ void MPCC::reconfigureCallback(predictive_control::PredictiveControllerConfig& c
     //Search window parameters
     window_size_ = config.window_size;
     n_search_points_ = config.n_search_points;
-}
-
-void MPCC::computeEgoDiscs()
-{
-    // Collect parameters for disc representation
-    int n_discs = controller_config_->n_discs_;
-    double length = controller_config_->ego_l_;
-    double width = controller_config_->ego_w_;
-
-    // Initialize positions of discs
-    x_discs_.resize(n_discs);
-
-    // Loop over discs and assign positions
-    for ( int discs_it = 0; discs_it < n_discs; discs_it++){
-        x_discs_[discs_it] = -length/2 + (discs_it + 1)*(length/(n_discs + 1));
-    }
-
-    // Compute radius of the discs
-    r_discs_ = sqrt(pow(x_discs_[n_discs - 1] - length/2,2) + pow(width/2,2));
-    ROS_WARN_STREAM("Generated " << n_discs <<  " ego-vehicle discs with radius " << r_discs_ );
 }
 
 void MPCC::broadcastPathPose(){
@@ -400,13 +286,9 @@ void MPCC::runNode(const ros::TimerEvent &event)
         acadoVariables.x[0] = current_state_(0);
         acadoVariables.x[1] = current_state_(1);
         acadoVariables.x[2] = current_state_(2);
-        acadoVariables.x[4] = 0.0000001;          //dummy state
-        acadoVariables.x[5] = 0.0000001;          //dummy state
 
         acadoVariables.u[0] = controlled_velocity_.linear.x;
         acadoVariables.u[1] = controlled_velocity_.angular.z;
-        acadoVariables.u[2] = 0.0000001;           //slack variable
-        acadoVariables.u[3] = 0.0000001;           //slack variable
 
 		if(acadoVariables.x[3] > ss[2]) {
 
@@ -430,16 +312,10 @@ void MPCC::runNode(const ros::TimerEvent &event)
 		    }
         }
 
-        ComputeCollisionFreeArea();
-
-//        ROS_INFO_STREAM("traj_i: " << traj_i);
-//        ROS_INFO_STREAM("ss_length: " << ss.size());
-
         if(idx == 1) {
             double smin;
             smin = spline_closest_point(ss[1], 100, acadoVariables.x[3], window_size_, n_search_points_);
             acadoVariables.x[3] = smin;
-//            ROS_ERROR_STREAM("smin: " << smin);
         }
         else
             acadoVariables.x[3] = acadoVariables.x[3];
@@ -490,54 +366,12 @@ void MPCC::runNode(const ros::TimerEvent &event)
 
             acadoVariables.od[(ACADO_NOD * N_iter) + 34] = ss[2] + 0.02;
             acadoVariables.od[(ACADO_NOD * N_iter) + 35] = ss[3] + 0.02;
-
-            acadoVariables.od[(ACADO_NOD * N_iter) + 36] = slack_weight_;        // weight on the slack variable
-            acadoVariables.od[(ACADO_NOD * N_iter) + 37] = repulsive_weight_;    // weight on the repulsive cost
-
-            acadoVariables.od[(ACADO_NOD * N_iter) + 40] = obstacles_.Obstacles[0].pose.position.x;      // x position of obstacle 1
-            acadoVariables.od[(ACADO_NOD * N_iter) + 41] = obstacles_.Obstacles[0].pose.position.y;      // y position of obstacle 1
-            acadoVariables.od[(ACADO_NOD * N_iter) + 42] = obstacles_.Obstacles[0].pose.orientation.z;   // heading of obstacle 1
-            acadoVariables.od[(ACADO_NOD * N_iter) + 43] = obstacles_.Obstacles[0].major_semiaxis;       // major semiaxis of obstacle 1
-            acadoVariables.od[(ACADO_NOD * N_iter) + 44] = obstacles_.Obstacles[0].minor_semiaxis;       // minor semiaxis of obstacle 1
-
-            acadoVariables.od[(ACADO_NOD * N_iter) + 45] = obstacles_.Obstacles[1].pose.position.x;      // x position of obstacle 2
-            acadoVariables.od[(ACADO_NOD * N_iter) + 46] = obstacles_.Obstacles[1].pose.position.y;      // y position of obstacle 2
-            acadoVariables.od[(ACADO_NOD * N_iter) + 47] = obstacles_.Obstacles[1].pose.orientation.z;   // heading of obstacle 2
-            acadoVariables.od[(ACADO_NOD * N_iter) + 48] = obstacles_.Obstacles[1].major_semiaxis;       // major semiaxis of obstacle 2
-            acadoVariables.od[(ACADO_NOD * N_iter) + 49] = obstacles_.Obstacles[1].minor_semiaxis;       // minor semiaxis of obstacle 2
-              
-			// Set radii for collision free circles on static environment
-            acadoVariables.od[(ACADO_NOD * N_iter) + 50] = 30; collision_free_R_[N_iter];
-            acadoVariables.od[(ACADO_NOD * N_iter) + 51] = collision_free_X_[N_iter];
-            acadoVariables.od[(ACADO_NOD * N_iter) + 52] = collision_free_Y_[N_iter];
-
-            acadoVariables.od[(ACADO_NOD * N_iter) + 53] = collision_free_xmin[N_iter];
-            acadoVariables.od[(ACADO_NOD * N_iter) + 54] = collision_free_xmax[N_iter];
-            acadoVariables.od[(ACADO_NOD * N_iter) + 55] = collision_free_ymin[N_iter];
-            acadoVariables.od[(ACADO_NOD * N_iter) + 56] = collision_free_ymax[N_iter];
-
-            acadoVariables.od[(ACADO_NOD * N_iter) + 57] = collision_free_a1x[N_iter];
-            acadoVariables.od[(ACADO_NOD * N_iter) + 58] = collision_free_a2x[N_iter];
-            acadoVariables.od[(ACADO_NOD * N_iter) + 59] = collision_free_a3x[N_iter];
-            acadoVariables.od[(ACADO_NOD * N_iter) + 60] = collision_free_a4x[N_iter];
-
-            acadoVariables.od[(ACADO_NOD * N_iter) + 61] = collision_free_a1y[N_iter];
-            acadoVariables.od[(ACADO_NOD * N_iter) + 62] = collision_free_a2y[N_iter];
-            acadoVariables.od[(ACADO_NOD * N_iter) + 63] = collision_free_a3y[N_iter];
-            acadoVariables.od[(ACADO_NOD * N_iter) + 64] = collision_free_a4y[N_iter];
-
-            acadoVariables.od[(ACADO_NOD * N_iter) + 65] = collision_free_C1[N_iter];
-            acadoVariables.od[(ACADO_NOD * N_iter) + 66] = collision_free_C2[N_iter];
-            acadoVariables.od[(ACADO_NOD * N_iter) + 67] = collision_free_C3[N_iter];
-            acadoVariables.od[(ACADO_NOD * N_iter) + 68] = collision_free_C4[N_iter];
 }
 
         acadoVariables.x0[ 0 ] = current_state_(0);
         acadoVariables.x0[ 1 ] = current_state_(1);
         acadoVariables.x0[ 2 ] = current_state_(2);
 		acadoVariables.x0[ 3 ] = acadoVariables.x[3];
-        acadoVariables.x0[ 4 ] = 0.0000001;             //dummy state
-        acadoVariables.x0[ 5 ] = 0.0000001;             //dummy state
 
         acado_preparationStep();
 
@@ -562,8 +396,6 @@ void MPCC::runNode(const ros::TimerEvent &event)
 		controlled_velocity_.angular.z = acadoVariables.u[1];
 
         publishPredictedTrajectory();
-		publishPredictedCollisionSpace();
-        publishPosConstraint();
 		publishPredictedOutput();
 		publishLocalSplineTrajectory();
 		broadcastPathPose();
@@ -823,24 +655,6 @@ void MPCC::moveitGoalCB()
         
         acado_initializeSolver( );
 
-        int N_iter;
-		for (N_iter = 0; N_iter < ACADO_N; N_iter++) {
-
-            // Initialize Constant Online Data variables
-            acadoVariables.od[(ACADO_NOD * N_iter) + 38] = r_discs_;                                // radius of car discs
-            acadoVariables.od[(ACADO_NOD * N_iter) + 39] = 0; //x_discs_[1];                        // position of the car discs
-        }
-
-        if (map_service_.call(map_srv_))
-        {
-            ROS_ERROR("Service GetMap succeeded.");
-            environment_grid_ = map_srv_.response.map;
-        }
-        else
-        {
-            ROS_ERROR("Service GetMap failed.");
-        }
-
         traj_i = 0;
 
 		goal_reached_ = false;
@@ -849,243 +663,8 @@ void MPCC::moveitGoalCB()
         InitLocalRefPath();
 		publishLocalSplineTrajectory();
         publishGlobalPlan();
-
-		ComputeCollisionFreeArea();
     }
 }
-
-void MPCC::ComputeCollisionFreeArea()
-{
-    acado_timer t;
-    acado_tic( &t );
-
-    int x_path_i, y_path_i;
-    double x_path, y_path, psi_path, theta_search, r;
-    std::vector<double> C_N;
-
-    int search_steps = 10;
-
-    collision_free_r_min_ = collision_free_r_max_;
-
-    // Iterate over points in prediction horizon to search for collision free circles
-    for (int N_it = 0; N_it < ACADO_N; N_it++)
-    {
-
-        // Current search point of prediction horizon
-        x_path = acadoVariables.x[N_it * ACADO_NX + 0];
-        y_path = acadoVariables.x[N_it * ACADO_NX + 1];
-        psi_path = acadoVariables.x[N_it * ACADO_NX + 2];
-
-        // Assign current position in prediction horizon to vector
-        collision_free_X_[N_it] = x_path;
-        collision_free_Y_[N_it] = y_path;
-
-        // Find corresponding index of the point in the occupancy grid map
-        x_path_i = (int) round((x_path - environment_grid_.info.origin.position.x)/environment_grid_.info.resolution);
-        y_path_i = (int) round((y_path - environment_grid_.info.origin.position.y)/environment_grid_.info.resolution);
-
-        // Compute the constraint
-        C_N = computeConstraint(x_path_i,y_path_i,x_path, y_path, psi_path, N_it);
-
-//        if (N_it == ACADO_N - 1)
-//        {
-//            ROS_INFO_STREAM("---------------------------------------------------------------------------");
-//            ROS_INFO_STREAM("Searching last rectangle at x = " << x_path << " y = " << y_path << " psi = " << psi_path);
-//        }
-
-    }
-
-    te_collision_free_ = acado_toc(&t);
-    ROS_INFO_STREAM("Free space solve time " << te_collision_free_ * 1e6 << " us");
-}
-
-std::vector<double> MPCC::computeConstraint(int x_i, int y_i, double x_path, double y_path, double psi_path, int N)
-{
-    // Initialize output constraints
-    std::vector<double> computedConstraint;
-
-    // Initialize linear constraint normal vectors
-    std::vector<double> t1(2, 0), t2(2, 0), t3(2, 0), t4(2, 0);
-
-    // Declare search iterators
-    int x_min, x_max, y_min, y_max;
-    int search_x, search_y;
-    int r_max_i_min, r_max_i_max;
-
-    // define maximum search distance in occupancy grid cells, based on discretization
-    r_max_i_min = (int) round(-collision_free_r_max_ /environment_grid_.info.resolution);
-    r_max_i_max = (int) round(collision_free_r_max_/environment_grid_.info.resolution);
-
-    // Initialize found rectabgle values with maxium search distance
-    x_min = r_max_i_min;
-    x_max = r_max_i_max;
-    y_min = r_max_i_min;
-    y_max = r_max_i_max;
-
-    // Initialize search distance iterator
-    int search_distance = 1;
-    // Initialize boolean that indicates whether the region has been found
-    bool search_region = true;
-
-    // Iterate until the region is found
-    while (search_region)
-    {
-        // Only search in x_min direction if no value has been found yet
-        if (x_min == r_max_i_min)
-        {
-            search_x = -search_distance;
-            for (int search_y_it = std::max(-search_distance,y_min); search_y_it < std::min(search_distance,y_max); search_y_it++)
-            {
-                // Correct search iterator if out of map bounds
-                if (y_i + search_y_it > environment_grid_.info.height){search_y_it = environment_grid_.info.height - y_i;}
-                if (y_i + search_y_it < 0){search_y_it = -y_i;}
-                // Assign value if occupied cell is found
-//                if (getOccupancy(x_i + search_x, y_i + search_y_it) > occupied_)
-                if (getRotatedOccupancy(x_i, search_x, y_i, search_y_it, psi_path) > occupied_)
-                {
-                    x_min = search_x;
-                }
-            }
-        } //else {ROS_INFO_STREAM("Already found x_min = " << x_min);}
-
-        // Only search in x_max direction if no value has been found yet
-        if (x_max == r_max_i_max)
-        {
-            search_x = search_distance;
-            for (int search_y_it = std::max(-search_distance,y_min); search_y_it < std::min(search_distance,y_max); search_y_it++)
-            {
-                // Correct search iterator if out of map bounds
-                if (y_i + search_y_it > environment_grid_.info.height){search_y_it = environment_grid_.info.height - y_i;}
-                if (y_i + search_y_it < 0){search_y_it = -y_i;}
-                // Assign value if occupied cell is found
-//              if (getOccupancy(x_i + search_x, y_i + search_y_it) > occupied_)
-                if (getRotatedOccupancy(x_i, search_x, y_i, search_y_it, psi_path) > occupied_)
-                {
-                    x_max = search_x;
-                }
-            }
-        } //else {ROS_INFO_STREAM("Already found x_max = " << x_max);}
-
-        // Only search in y_min direction if no value has been found yet
-        if (y_min == r_max_i_min)
-        {
-            search_y = -search_distance;
-            for (int search_x_it = std::max(-search_distance,x_min); search_x_it < std::min(search_distance,x_max); search_x_it++)
-            {
-                // Correct search iterator if out of map bounds
-                if (x_i + search_x_it > environment_grid_.info.width){search_x_it = environment_grid_.info.width - x_i;}
-                if (x_i + search_x_it < 0){search_x_it = -x_i;}
-                // Assign value if occupied cell is found
-//                if (getOccupancy(x_i + search_x_it, y_i + search_y) > occupied_)
-                if (getRotatedOccupancy(x_i, search_x_it, y_i, search_y, psi_path) > occupied_)
-                {
-                    y_min = search_y;
-                }
-            }
-        } //else {ROS_INFO_STREAM("Already found y_min = " << y_min);}
-
-        // Only search in y_max direction if no value has been found yet
-        if (y_max == r_max_i_max)
-        {
-            search_y = search_distance;
-            for (int search_x_it = std::max(-search_distance,x_min); search_x_it < std::min(search_distance,x_max); search_x_it++)
-            {
-                // Correct search iterator if out of map bounds
-                if (x_i + search_x_it > environment_grid_.info.width){search_x_it = environment_grid_.info.width - x_i;}
-                if (x_i + search_x_it < 0){search_x_it = -x_i;}
-                // Assign value if occupied cell is found
-//                if (getOccupancy(x_i + search_x_it, y_i + search_y) > occupied_)
-                if (getRotatedOccupancy(x_i, search_x_it, y_i, search_y, psi_path) > occupied_)
-                {
-                    y_max = search_y;
-                }
-            }
-        } //else {ROS_INFO_STREAM("Already found y_max = " << y_max);}
-
-        // Increase search distance
-        search_distance++;
-        // Determine whether the search is finished
-        search_region = (search_distance < r_max_i_max) && ( x_min == r_max_i_min || x_max == r_max_i_max || y_min == r_max_i_min || y_max == r_max_i_max );
-    }
-
-    // Assign the rectangle values
-    collision_free_xmin[N] = x_min*environment_grid_.info.resolution + 0.35;
-    collision_free_xmax[N] = x_max*environment_grid_.info.resolution - 0.35;
-    collision_free_ymin[N] = y_min*environment_grid_.info.resolution + 0.35;
-    collision_free_ymax[N] = y_max*environment_grid_.info.resolution - 0.35;
-
-    std::vector<double> sqx(4,0), sqy(4,0);
-
-    sqx[0] = x_path + cos(psi_path)*collision_free_xmin[N] - sin(psi_path)*collision_free_ymin[N];
-    sqx[1] = x_path + cos(psi_path)*collision_free_xmin[N] - sin(psi_path)*collision_free_ymax[N];
-    sqx[2] = x_path + cos(psi_path)*collision_free_xmax[N] - sin(psi_path)*collision_free_ymax[N];
-    sqx[3] = x_path + cos(psi_path)*collision_free_xmax[N] - sin(psi_path)*collision_free_ymin[N];
-
-    sqy[0] = y_path + sin(psi_path)*collision_free_xmin[N] + cos(psi_path)*collision_free_ymin[N];
-    sqy[1] = y_path + sin(psi_path)*collision_free_xmin[N] + cos(psi_path)*collision_free_ymax[N];
-    sqy[2] = y_path + sin(psi_path)*collision_free_xmax[N] + cos(psi_path)*collision_free_ymax[N];
-    sqy[3] = y_path + sin(psi_path)*collision_free_xmax[N] + cos(psi_path)*collision_free_ymin[N];
-
-    t1[0] = (sqx[1] - sqx[0])/sqrt((sqx[1] - sqx[0])*(sqx[1] - sqx[0]) + (sqy[1] - sqy[0])*(sqy[1] - sqy[0]));
-    t2[0] = (sqx[2] - sqx[1])/sqrt((sqx[2] - sqx[1])*(sqx[2] - sqx[1]) + (sqy[2] - sqy[1])*(sqy[2] - sqy[1]));
-    t3[0] = (sqx[3] - sqx[2])/sqrt((sqx[3] - sqx[2])*(sqx[3] - sqx[2]) + (sqy[3] - sqy[2])*(sqy[3] - sqy[2]));
-    t4[0] = (sqx[0] - sqx[3])/sqrt((sqx[0] - sqx[3])*(sqx[0] - sqx[3]) + (sqy[0] - sqy[3])*(sqy[0] - sqy[3]));
-
-    t1[1] = (sqy[1] - sqy[0])/sqrt((sqx[1] - sqx[0])*(sqx[1] - sqx[0]) + (sqy[1] - sqy[0])*(sqy[1] - sqy[0]));
-    t2[1] = (sqy[2] - sqy[1])/sqrt((sqx[2] - sqx[1])*(sqx[2] - sqx[1]) + (sqy[2] - sqy[1])*(sqy[2] - sqy[1]));
-    t3[1] = (sqy[3] - sqy[2])/sqrt((sqx[3] - sqx[2])*(sqx[3] - sqx[2]) + (sqy[3] - sqy[2])*(sqy[3] - sqy[2]));
-    t4[1] = (sqy[0] - sqy[3])/sqrt((sqx[0] - sqx[3])*(sqx[0] - sqx[3]) + (sqy[0] - sqy[3])*(sqy[0] - sqy[3]));
-
-    collision_free_a1x[N] = t1[1];
-    collision_free_a2x[N] = t2[1];
-    collision_free_a3x[N] = t3[1];
-    collision_free_a4x[N] = t4[1];
-
-    collision_free_a1y[N] = -t1[0];
-    collision_free_a2y[N] = -t2[0];
-    collision_free_a3y[N] = -t3[0];
-    collision_free_a4y[N] = -t4[0];
-
-    collision_free_C1[N] = sqx[0]*collision_free_a1x[N] + sqy[0]*collision_free_a1y[N];
-    collision_free_C2[N] = sqx[1]*collision_free_a2x[N] + sqy[1]*collision_free_a2y[N];
-    collision_free_C3[N] = sqx[2]*collision_free_a3x[N] + sqy[2]*collision_free_a3y[N];
-    collision_free_C4[N] = sqx[3]*collision_free_a4x[N] + sqy[3]*collision_free_a4y[N];
-
-    if (N == ACADO_N - 1)
-    {
-        ROS_INFO_STREAM("x = " << x_path << " y = " << y_path << " psi = " << psi_path);
-        ROS_INFO_STREAM("x_i = " << x_i << " y_i = " << y_i);
-        ROS_INFO_STREAM("xmin_i = " << x_min << " x_max_i = " << x_max << " ymin_i = " << y_min << " y_max_i = " << y_max);
-        ROS_INFO_STREAM("xmin = " << collision_free_xmin[N] << " x_max = " << collision_free_xmax[N] << " ymin = " << collision_free_ymin[N] << " y_max = " << collision_free_ymax[N]);
-        ROS_INFO_STREAM("xmin_R = " << collision_free_xmin[N] << " xmax_R = " << collision_free_xmax[N] << " ymin_R = " << collision_free_ymin[N] << " ymax_R = " << collision_free_ymax[N]);
-        ROS_INFO_STREAM("sq[0] = [" << sqx[0] << ", " << sqy[0] << "], sq[1] = [" << sqx[1] << ", " << sqy[1] << "], sq[2] = [" << sqx[2] << ", " << sqy[2] << "], sq[3] = [" << sqx[3] << ", " << sqy[3] << "]" );
-        ROS_INFO_STREAM("t1 = [" << t1[0] << ", " << t1[1] << "], t2 = [" << t2[0] << ", " << t2[1] << "], t3 = [" << t3[0] << ", " << t3[1] << "], t4 = [" << t4[0] << ", " << t4[1] << "]" );
-        ROS_INFO_STREAM("collision_free_a1 = [" << collision_free_a1x[N] << ", " << collision_free_a1y[N] << "], collision_free_a2 = [" << collision_free_a2x[N] << ", " << collision_free_a2y[N] << "], collision_free_a3 = [" << collision_free_a3x[N] << ", " << collision_free_a3y[N] << "], collision_free_a4 = [" << collision_free_a4x[N] << ", " << collision_free_a4y[N] << "]" );
-        ROS_INFO_STREAM("collision_free_C1 = [" << collision_free_C1[N] << "], collision_free_C2 = [" << collision_free_C2[N] << "], collision_free_C3 = [" << collision_free_C3[N] << "], collision_free_C4 = [" << collision_free_C4[N] << "]" );
-    }
-
-
-//    ROS_INFO_STREAM("xi = " << x_i << " yi = " << y_i );
-//    ROS_INFO_STREAM("xmin = " << collision_free_xmin[N] << " x_max = " << collision_free_xmax[N] << " ymin = " << collision_free_ymin[N] << " y_max = " << collision_free_ymax[N] );
-
-    // Return the computed constraint
-    return computedConstraint;
-}
-
-
-int MPCC::getOccupancy(int x_i, int y_i)
-{
-    return environment_grid_.data[environment_grid_.info.width*y_i + x_i];
-}
-
-int MPCC::getRotatedOccupancy(int x_i, int search_x, int y_i, int search_y, double psi)
-{
-    int x_search_rotated = (int) round(cos(psi)*search_x - sin(psi)*search_y);
-    int y_search_rotated = (int) round(sin(psi)*search_x + cos(psi)*search_y);
-
-    return environment_grid_.data[environment_grid_.info.width*(y_i + y_search_rotated) + (x_i + x_search_rotated)];
-}
-
 
 void MPCC::executeTrajectory(const moveit_msgs::RobotTrajectory & traj){
 
@@ -1121,41 +700,6 @@ void MPCC::StateCallBack(const geometry_msgs::Pose::ConstPtr& msg)
     current_state_(0) =    msg->position.x;
     current_state_(1) =    msg->position.y;
     current_state_(2) =    msg->orientation.z;
-}
-
-void MPCC::ObstacleCallBack(const obstacle_feed::Obstacles& obstacles)
-{
-//    ROS_INFO("OBSTACLECB");
-
-    obstacle_feed::Obstacles total_obstacles;
-    total_obstacles.Obstacles.resize(controller_config_->n_obstacles_);
-
-    total_obstacles.Obstacles = obstacles.Obstacles;
-
-//    ROS_INFO_STREAM("-- Received # obstacles: " << obstacles.Obstacles.size());
-//    ROS_INFO_STREAM("-- Expected # obstacles: " << controller_config_->n_obstacles_);
-
-    if (obstacles.Obstacles.size() < controller_config_->n_obstacles_)
-    {
-        for (int obst_it = obstacles.Obstacles.size(); obst_it < controller_config_->n_obstacles_; obst_it++)
-        {
-            total_obstacles.Obstacles[obst_it].pose.position.x = 1000;
-            total_obstacles.Obstacles[obst_it].pose.position.y = 1000;
-            total_obstacles.Obstacles[obst_it].pose.orientation.z = 0;
-            total_obstacles.Obstacles[obst_it].major_semiaxis = 0.001;
-            total_obstacles.Obstacles[obst_it].minor_semiaxis = 0.001;
-        }
-    }
-
-    obstacles_.Obstacles.resize(controller_config_->n_obstacles_);
-
-    for (int total_obst_it = 0; total_obst_it < controller_config_->n_obstacles_; total_obst_it++)
-    {
-        obstacles_.Obstacles[total_obst_it] = total_obstacles.Obstacles[total_obst_it];
-    }
-
-//    ROS_INFO_STREAM("-- total_Obst1: [" << total_obstacles.Obstacles[0].pose.position.x << ",  " << total_obstacles.Obstacles[0].pose.position.y << "], Obst2 [" << total_obstacles.Obstacles[1].pose.position.x << ",  " << total_obstacles.Obstacles[1].pose.position.y << "]");
-//    ROS_INFO_STREAM("-- Obst1_: [" << obstacles_.Obstacles[0].pose.position.x << ",  " << obstacles_.Obstacles[0].pose.position.y << "], Obst2 [" << obstacles_.Obstacles[1].pose.position.x << ",  " << obstacles_.Obstacles[1].pose.position.y << "]");
 }
 
 void MPCC::publishZeroJointVelocity()
@@ -1255,25 +799,6 @@ void MPCC::publishPredictedOutput(void)
 	pred_cmd_pub_.publish(pred_cmd_);
 }
 
-void MPCC::publishPredictedCollisionSpace(void)
-{
-	visualization_msgs::MarkerArray collision_space;
-
-	for (int i = 0; i < ACADO_N; i++)
-	{
-		ellips1.id = 60+i;
-		ellips1.pose.position.x = acadoVariables.x[i * ACADO_NX + 0];
-		ellips1.pose.position.y = acadoVariables.x[i * ACADO_NX + 1];
-		ellips1.pose.orientation.x = 0;
-		ellips1.pose.orientation.y = 0;
-		ellips1.pose.orientation.z = 0;
-		ellips1.pose.orientation.w = 1;
-		collision_space.markers.push_back(ellips1);
-	}
-
-	robot_collision_space_pub_.publish(collision_space);
-}
-
 void MPCC::publishCost(void){
 
 	cost_pub_.publish(cost_);
@@ -1305,45 +830,6 @@ void MPCC::publishContourError(void){
     errors.data[1] = lag_error_;
 
     contour_error_pub_.publish(errors);
-}
-
-void MPCC::ZRotToQuat(geometry_msgs::Pose& pose)
-{
-    pose.orientation.w = cos(pose.orientation.z * 0.5);
-    pose.orientation.x = 0;
-    pose.orientation.y = 0;
-    pose.orientation.z = sin(pose.orientation.z * 0.5);
-}
-
-void MPCC::publishPosConstraint(){
-
-    visualization_msgs::MarkerArray collision_free;
-    double x_center, y_center;
-
-    for (int i = 0; i < ACADO_N; i++)
-    {
-        cube1.scale.x = -collision_free_xmin[i] + collision_free_xmax[i];
-        cube1.scale.y = -collision_free_ymin[i] + collision_free_ymax[i];
-        cube1.scale.z = 0.01;
-
-        // Find the center of the collision free area to be able to draw it properly
-        x_center = collision_free_xmax[i] - (-collision_free_xmin[i] + collision_free_xmax[i])/2;
-        y_center = collision_free_ymax[i] - (-collision_free_ymin[i] + collision_free_ymax[i])/2;
-
-        // Assign center of cube
-        cube1.pose.position.x = acadoVariables.x[i * ACADO_NX + 0] + cos(acadoVariables.x[i * ACADO_NX + 2])*x_center - sin(acadoVariables.x[i * ACADO_NX + 2])*y_center;
-        cube1.pose.position.y = acadoVariables.x[i * ACADO_NX + 1] + sin(acadoVariables.x[i * ACADO_NX + 2])*x_center + cos(acadoVariables.x[i * ACADO_NX + 2])*y_center;
-
-        cube1.id = 400+i;
-        cube1.pose.orientation.x = 0;
-        cube1.pose.orientation.y = 0;
-        cube1.pose.orientation.z = acadoVariables.x[i * ACADO_NX + 2];
-        cube1.pose.orientation.w = 1;
-        ZRotToQuat(cube1.pose);
-        collision_free.markers.push_back(cube1);
-    }
-
-    collision_free_pub_.publish(collision_free);
 }
 
 void MPCC::publishFeedback(int& it, double& time)
@@ -1379,21 +865,6 @@ void MPCC::publishFeedback(int& it, double& time)
     feedback_msg.enable_output = enable_output_;
 
     feedback_msg.vRef = reference_velocity_;
-
-    feedback_msg.obstacle_distance1 = sqrt(pow(pred_traj_.poses[0].pose.position.x - obstacles_.Obstacles[0].pose.position.x ,2) + pow(pred_traj_.poses[0].pose.position.y - obstacles_.Obstacles[0].pose.position.y,2));
-    feedback_msg.obstacle_distance2 = sqrt(pow(pred_traj_.poses[0].pose.position.x - obstacles_.Obstacles[1].pose.position.x ,2) + pow(pred_traj_.poses[0].pose.position.y - obstacles_.Obstacles[1].pose.position.y,2));
-
-    feedback_msg.obstx_0 = obstacles_.Obstacles[0].pose.position.x;
-    feedback_msg.obsty_0 = obstacles_.Obstacles[0].pose.position.y;
-    feedback_msg.obsth_0 = obstacles_.Obstacles[0].pose.orientation.z;
-    feedback_msg.obsta_0 = obstacles_.Obstacles[0].major_semiaxis;
-    feedback_msg.obstb_0 = obstacles_.Obstacles[0].minor_semiaxis;
-
-    feedback_msg.obstx_1 = obstacles_.Obstacles[1].pose.position.x;
-    feedback_msg.obsty_1 = obstacles_.Obstacles[1].pose.position.y;
-    feedback_msg.obsth_1 = obstacles_.Obstacles[1].pose.orientation.z;
-    feedback_msg.obsta_1 = obstacles_.Obstacles[1].major_semiaxis;
-    feedback_msg.obstb_1 = obstacles_.Obstacles[1].minor_semiaxis;
 
     //Search window parameters
     feedback_msg.window = window_size_;
