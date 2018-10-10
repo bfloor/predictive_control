@@ -78,6 +78,8 @@
 #include <tkspline/spline.h>
 #include <predictive_control/Clothoid.h>
 
+#include <predictive_control/ReferencePath.h>
+
 typedef double real_t;
 
 class MPCC
@@ -187,12 +189,12 @@ public:
 	nav_msgs::Path pred_cmd_;
 	nav_msgs::Path local_spline_traj1_,local_spline_traj2_,local_spline_traj3_;
 
-	int traj_i;
+	int seg_i;
 	//Controller options
 	bool enable_output_;
 	int n_iterations_;
 	bool simulation_mode_;
-    real_t te_, te_collision_free_;
+    real_t te_;
 
 	tf2_ros::TransformBroadcaster state_pub_, path_pose_pub_;
 	std_msgs::Float64 cost_;
@@ -200,13 +202,13 @@ public:
     double lag_error_;
 
 	//Spline trajectory generation
-	tk::spline ref_path_x, ref_path_y;
+//	tk::spline ref_path_x, ref_path_y;
 
 	//MPCC Implementation
-	std::vector<double> X_global, Y_global, Theta_global;
+//	std::vector<double> X_global, Y_global, Theta_global;
     double total_length_;
     std::vector<double> ss,xx,yy,vv;
-    int n_clothoid, n_pts, N_local, n_traj_per_cloth, n_cloth_segments,n_pts_all ;
+    int N_local, n_traj_per_cloth;
     //Search window parameters
     double s0_;
     double window_size_;
@@ -214,6 +216,8 @@ public:
     bool goal_reached_;
     bool last_poly_;
     bool loop_mode_;
+
+    ReferencePath referencePath;
 
 private:
 
@@ -321,7 +325,7 @@ private:
 
 	void publishGlobalPlan(void);
 
-	void publishLocalSplineTrajectory(void);
+	void publishLocalRefPath(void);
 
 	void publishPredictedOutput(void);
 
@@ -333,16 +337,6 @@ private:
 
 	void broadcastPathPose();
 
-	double spline_closest_point(double s_min, double s_max, double s_guess, double window, int n_tries);
-
-    inline void Ref_path(std::vector<double> x, std::vector<double> y, std::vector<double> theta);
-
-    void ConstructRefPath();
-
-    void InitLocalRefPath();
-
-    void UpdateLocalRefPath();
-
     void publishFeedback(int& it, double& time);
 
     /**
@@ -350,10 +344,6 @@ private:
      */
     void clearDataMember();
 
-	/**
-     * @brief executeTrajectory: changes the goal state of the mpcc to each point of trajectory
-     */
-	void executeTrajectory(const moveit_msgs::RobotTrajectory & traj);
 };
 
 #endif

@@ -87,8 +87,8 @@ generate_messages(
 
 catkin_package(
   CATKIN_DEPENDS actionlib_msgs cob_srvs dynamic_reconfigure eigen_conversions geometry_msgs kdl_conversions kdl_parser nav_msgs roscpp sensor_msgs std_msgs tf tf_conversions urdf visualization_msgs shape_msgs moveit_core
-  DEPENDS Boost #ACADO
-  INCLUDE_DIRS include/${PROJECT_NAME} #include ${ACADO_INCLUDE_DIRS} 
+  DEPENDS Boost
+  INCLUDE_DIRS include/${PROJECT_NAME}
   LIBRARIES  predictive_configuration predictive_controller
 )
 
@@ -96,8 +96,6 @@ catkin_package(
 include_directories(include
     ${catkin_INCLUDE_DIRS}
     ${EIGEN_INCLUDE_DIRS}
-    #${orocos_kdl_INCLUDE_DIRS}
-    #${ACADO_INCLUDE_DIRS}
     include/${PROJECT_NAME}
     include/${PROJECT_NAME}/generated_mpc
     qpoases/include
@@ -118,6 +116,7 @@ add_library(predictive_controller
         src/mpcc_controller.cpp
         src/predictive_configuration.cpp
         src/Clothoid.cpp
+        src/ReferencePath.cpp
         qpoases/SRC/Bounds.cpp
         qpoases/SRC/Constraints.cpp
         qpoases/SRC/CyclingManager.cpp
